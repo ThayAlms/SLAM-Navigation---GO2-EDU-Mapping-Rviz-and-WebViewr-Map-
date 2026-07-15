@@ -1,0 +1,1142 @@
+#!/usr/bin/env python3
+"""Mapa 3D deduplicado sobre o LIO nativo e estável do Unitree Go2."""
+
+import fcntl
+import json
+import math
+import os
+import re
+import select
+import signal
+import sys
+import termios
+import threading
+import time
+import tty
+from datetime import datetime
+from pathlib import Path
+
+import numpy as np
+import rclpy
+from nav_msgs.msg import Odometry
+from rclpy.node import Node
+from rclpy.qos import (
+    DurabilityPolicy,
+    HistoryPolicy,
+    QoSProfile,
+    ReliabilityPolicy,
+    qos_profile_sensor_data,
+)
+from sensor_msgs.msg import Imu, PointCloud2, PointField
+from std_msgs.msg import String
+from std_srvs.srv import Trigger
+from unitree_api.msg import Request, Response
+from unitree_go.msg import SportModeState
+
+
+MOVE_API_ID = 1008
+STOP_API_ID = 1003
+STAND_UP_API_ID = 1004
+STAND_DOWN_API_ID = 1005
+REMOTE_MOVE_API_ID = 1003
+REMOTE_SOURCE_API_ID = 1004
+POSTURE_TRANSITION_SECONDS = 4.0
+MOTION_PUBLISH_PERIOD_SECONDS = 0.02
+MOTION_WATCHDOG_SECONDS = 0.35
+DEFAULT_SPEED_PERCENT = 30
+MIN_SPEED_PERCENT = 10
+MAX_SPEED_PERCENT = 50
+SPEED_STEP_PERCENT = 5
+
+# Convenção do SDK: x é longitudinal, y é lateral e z é velocidade de yaw.
+# O recuo fica mais lento porque foi o movimento que apresentou instabilidade.
+MOTION_PROFILES = {
+    "forward": (0.22, 0.0, 0.0),
+    "backward": (-0.18, 0.0, 0.0),
+    "rotate_left": (0.0, 0.0, 0.30),
+    "rotate_right": (0.0, 0.0, -0.30),
+}
+
+
+class Go2MappingNode(Node):
+    def __init__(self):
+        super().__init__("go2_slam_mapping")
+
+        default_maps = str(Path(__file__).resolve().parent.parent / "maps")
+        self.declare_parameter("voxel_size", 0.06)
+        self.declare_parameter("min_voxel_hits", 2)
+        self.declare_parameter("max_range", 20.0)
+        self.declare_parameter("max_points", 500000)
+        self.declare_parameter("publish_max_points", 120000)
+        self.declare_parameter("cloud_topic", "/utlidar/cloud_deskewed")
+        self.declare_parameter("odom_topic", "/utlidar/robot_odom")
+        self.declare_parameter("imu_topic", "/utlidar/imu")
+        self.declare_parameter("keyframe_distance", 0.04)
+        self.declare_parameter("keyframe_rotation_deg", 2.5)
+        self.declare_parameter("keyframe_max_interval", 0.8)
+        self.declare_parameter("max_angular_velocity", 1.5)
+        self.declare_parameter("max_acceleration_delta", 4.0)
+        self.declare_parameter("max_odometry_jump", 0.20)
+        self.declare_parameter("max_odometry_rotation_deg", 20.0)
+        self.declare_parameter("maps_directory", default_maps)
+        self.declare_parameter("interactive", True)
+
+        self.voxel_size = float(self.get_parameter("voxel_size").value)
+        self.min_voxel_hits = int(self.get_parameter("min_voxel_hits").value)
+        self.max_range = float(self.get_parameter("max_range").value)
+        self.max_points = int(self.get_parameter("max_points").value)
+        self.publish_max_points = int(
+            self.get_parameter("publish_max_points").value
+        )
+        self.cloud_topic = str(self.get_parameter("cloud_topic").value)
+        self.odom_topic = str(self.get_parameter("odom_topic").value)
+        self.imu_topic = str(self.get_parameter("imu_topic").value)
+        self.keyframe_distance = float(
+            self.get_parameter("keyframe_distance").value
+        )
+        self.keyframe_rotation = math.radians(
+            float(self.get_parameter("keyframe_rotation_deg").value)
+        )
+        self.keyframe_max_interval = float(
+            self.get_parameter("keyframe_max_interval").value
+        )
+        self.max_angular_velocity = float(
+            self.get_parameter("max_angular_velocity").value
+        )
+        self.max_acceleration_delta = float(
+            self.get_parameter("max_acceleration_delta").value
+        )
+        self.max_odometry_jump = float(
+            self.get_parameter("max_odometry_jump").value
+        )
+        self.max_odometry_rotation = math.radians(
+            float(self.get_parameter("max_odometry_rotation_deg").value)
+        )
+        self.maps_directory = Path(
+            str(self.get_parameter("maps_directory").value)
+        ).expanduser()
+        self.maps_directory.mkdir(parents=True, exist_ok=True)
+
+        self._lock = threading.Lock()
+        self._voxels = {}
+        self._voxel_hits = {}
+        self._scan_count = 0
+        self._received_scan_count = 0
+        self._rejected_scan_count = 0
+        self._merged_point_count = 0
+        self._received_points = 0
+        self._started_at = time.monotonic()
+        self._last_publish = 0.0
+        self._last_cloud_at = 0.0
+        self._last_imu_at = 0.0
+        self._last_odom_at = 0.0
+        self._last_odom_jump_at = 0.0
+        self._last_saved_count = -1
+        self._latest_odom = None
+        self._latest_imu = None
+        self._latest_sport_state = None
+        self._last_sport_state_at = 0.0
+        self._posture_state = "unknown"
+        self._posture_target = None
+        self._posture_command_at = 0.0
+        self._origin_odom = None
+        self._last_keyframe_pose = None
+        self._last_keyframe_at = 0.0
+        self._map_frame = "odom"
+        self._control_armed = False
+        self._control_lock = threading.Lock()
+        self._last_motion_at = 0.0
+        self._last_stop_sent_at = 0.0
+        self._last_command = "stop"
+        self._last_command_at = 0.0
+        self._command_count = 0
+        self._command_counts = {
+            command: 0 for command in MOTION_PROFILES
+        }
+        self._motion_publish_count = 0
+        self._active_velocity = (0.0, 0.0, 0.0)
+        self._speed_percent = DEFAULT_SPEED_PERCENT
+        self._request_sequence = time.monotonic_ns()
+        self._remote_commands_from_api = False
+        self._last_sport_response = None
+        self._last_sport_response_at = 0.0
+        self._last_remote_response = None
+        self._last_remote_response_at = 0.0
+        self._moving = False
+        self._shutdown_started = False
+
+        map_qos = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+
+        self.map_pub = self.create_publisher(
+            PointCloud2, "/go2_slam/map_cloud", map_qos
+        )
+        self.status_pub = self.create_publisher(
+            String, "/go2_slam/status", 10
+        )
+        self.sport_pub = self.create_publisher(
+            Request, "/api/sport/request", 10
+        )
+        self.remote_control_pub = self.create_publisher(
+            Request, "/api/obstacles_avoid/request", 10
+        )
+
+        self.cloud_sub = self.create_subscription(
+            PointCloud2,
+            self.cloud_topic,
+            self._cloud_callback,
+            qos_profile_sensor_data,
+        )
+        self.odom_sub = self.create_subscription(
+            Odometry,
+            self.odom_topic,
+            self._odom_callback,
+            qos_profile_sensor_data,
+        )
+        self.imu_sub = self.create_subscription(
+            Imu,
+            self.imu_topic,
+            self._imu_callback,
+            qos_profile_sensor_data,
+        )
+        self.sport_state_sub = self.create_subscription(
+            SportModeState,
+            "/sportmodestate",
+            self._sport_state_callback,
+            qos_profile_sensor_data,
+        )
+        self.sport_response_sub = self.create_subscription(
+            Response,
+            "/api/sport/response",
+            self._sport_response_callback,
+            10,
+        )
+        self.remote_control_response_sub = self.create_subscription(
+            Response,
+            "/api/obstacles_avoid/response",
+            self._remote_control_response_callback,
+            10,
+        )
+
+        self.save_service = self.create_service(
+            Trigger, "/go2_slam/save_map", self._save_service
+        )
+        self.reset_service = self.create_service(
+            Trigger, "/go2_slam/reset_map", self._reset_service
+        )
+
+        self.publish_timer = self.create_timer(0.8, self.publish_map)
+        self.status_timer = self.create_timer(1.0, self.publish_status)
+        self.watchdog_timer = self.create_timer(
+            MOTION_PUBLISH_PERIOD_SECONDS, self._motion_watchdog
+        )
+
+        self.get_logger().info(
+            "SLAM robusto iniciado: %s + %s -> /go2_slam/map_cloud"
+            % (self.cloud_topic, self.imu_topic)
+        )
+        self.get_logger().info(
+            "LIO nativo + IMU + quadros-chave + voxels únicos de %.2f m; salvamento em %s"
+            % (self.voxel_size, self.maps_directory)
+        )
+
+    def _odom_callback(self, msg):
+        now = time.monotonic()
+        pose = msg.pose.pose
+        current = {
+            "x": float(pose.position.x),
+            "y": float(pose.position.y),
+            "z": float(pose.position.z),
+            "qx": float(pose.orientation.x),
+            "qy": float(pose.orientation.y),
+            "qz": float(pose.orientation.z),
+            "qw": float(pose.orientation.w),
+        }
+        previous = self._latest_odom
+        if previous is not None:
+            translation = math.sqrt(
+                (current["x"] - previous["x"]) ** 2
+                + (current["y"] - previous["y"]) ** 2
+                + (current["z"] - previous["z"]) ** 2
+            )
+            rotation = self._quaternion_distance(current, previous)
+            if (
+                translation > self.max_odometry_jump
+                or rotation > self.max_odometry_rotation
+            ):
+                self._last_odom_jump_at = now
+                self.get_logger().warning(
+                    "Salto de odometria rejeitado: %.3f m / %.1f graus"
+                    % (translation, math.degrees(rotation)),
+                    throttle_duration_sec=2.0,
+                )
+                return
+        self._latest_odom = current
+        self._last_odom_at = now
+        if self._origin_odom is None:
+            self._origin_odom = dict(current)
+
+    def _imu_callback(self, msg):
+        gyro = np.array(
+            [
+                msg.angular_velocity.x,
+                msg.angular_velocity.y,
+                msg.angular_velocity.z,
+            ],
+            dtype=np.float64,
+        )
+        accel = np.array(
+            [
+                msg.linear_acceleration.x,
+                msg.linear_acceleration.y,
+                msg.linear_acceleration.z,
+            ],
+            dtype=np.float64,
+        )
+        self._last_imu_at = time.monotonic()
+        self._latest_imu = {
+            "gyro_norm": float(np.linalg.norm(gyro)),
+            "acceleration_norm": float(np.linalg.norm(accel)),
+            "qx": float(msg.orientation.x),
+            "qy": float(msg.orientation.y),
+            "qz": float(msg.orientation.z),
+            "qw": float(msg.orientation.w),
+        }
+
+    def _sport_state_callback(self, msg):
+        now = time.monotonic()
+        forces = [float(value) for value in msg.foot_force]
+        position = [float(value) for value in msg.position]
+        self._last_sport_state_at = now
+        self._latest_sport_state = {
+            "mode": int(msg.mode),
+            "body_height": float(msg.body_height),
+            "position": position,
+            "velocity": [float(value) for value in msg.velocity],
+            "yaw_speed": float(msg.yaw_speed),
+            "foot_force": forces,
+        }
+
+        if (
+            self._posture_target
+            and now - self._posture_command_at < POSTURE_TRANSITION_SECONDS
+        ):
+            self._posture_state = "transitioning_" + self._posture_target
+            return
+        self._posture_target = None
+        support_force = sum(max(0.0, value) for value in forces)
+        height = position[2] if len(position) >= 3 else 0.0
+        if support_force > 20.0 or height > 0.18:
+            self._posture_state = "standing"
+        elif support_force < 5.0 and height < 0.14:
+            self._posture_state = "lying"
+        else:
+            self._posture_state = "unknown"
+
+    def _sport_response_callback(self, msg):
+        api_id = int(msg.header.identity.api_id)
+        if api_id not in {
+            MOVE_API_ID,
+            STOP_API_ID,
+            STAND_UP_API_ID,
+            STAND_DOWN_API_ID,
+        }:
+            return
+        self._last_sport_response_at = time.monotonic()
+        self._last_sport_response = {
+            "request_id": int(msg.header.identity.id),
+            "api_id": api_id,
+            "status_code": int(msg.header.status.code),
+            "data": str(msg.data),
+        }
+
+    def _remote_control_response_callback(self, msg):
+        if int(msg.header.identity.api_id) not in {
+            REMOTE_MOVE_API_ID,
+            REMOTE_SOURCE_API_ID,
+        }:
+            return
+        self._last_remote_response_at = time.monotonic()
+        self._last_remote_response = {
+            "request_id": int(msg.header.identity.id),
+            "api_id": int(msg.header.identity.api_id),
+            "status_code": int(msg.header.status.code),
+            "data": str(msg.data),
+        }
+
+    @staticmethod
+    def _quaternion_distance(first, second):
+        dot = abs(
+            first["qx"] * second["qx"]
+            + first["qy"] * second["qy"]
+            + first["qz"] * second["qz"]
+            + first["qw"] * second["qw"]
+        )
+        return 2.0 * math.acos(max(-1.0, min(1.0, dot)))
+
+    @staticmethod
+    def _quaternion_yaw(pose):
+        siny = 2.0 * (pose["qw"] * pose["qz"] + pose["qx"] * pose["qy"])
+        cosy = 1.0 - 2.0 * (pose["qy"] ** 2 + pose["qz"] ** 2)
+        return math.atan2(siny, cosy)
+
+    def _current_location(self):
+        pose = self._latest_odom
+        origin = self._origin_odom
+        if pose is None or origin is None:
+            return None
+        yaw = self._quaternion_yaw(pose) - self._quaternion_yaw(origin)
+        yaw = math.atan2(math.sin(yaw), math.cos(yaw))
+        return {
+            "x": pose["x"] - origin["x"],
+            "y": pose["y"] - origin["y"],
+            "z": pose["z"] - origin["z"],
+            "yaw_rad": yaw,
+            "yaw_deg": math.degrees(yaw),
+            "frame": self._map_frame,
+        }
+
+    def _accept_keyframe(self, now):
+        imu = self._latest_imu
+        if imu is None or now - self._last_imu_at > 0.25:
+            return False
+        if imu["gyro_norm"] > self.max_angular_velocity:
+            return False
+        if abs(imu["acceleration_norm"] - 9.80665) > self.max_acceleration_delta:
+            return False
+        if now - self._last_odom_at > 0.25:
+            return False
+        if now - self._last_odom_jump_at < 1.0:
+            return False
+
+        pose = self._latest_odom
+        if pose is None or self._last_keyframe_pose is None:
+            return True
+        translation = math.sqrt(
+            (pose["x"] - self._last_keyframe_pose["x"]) ** 2
+            + (pose["y"] - self._last_keyframe_pose["y"]) ** 2
+            + (pose["z"] - self._last_keyframe_pose["z"]) ** 2
+        )
+        rotation = self._quaternion_distance(pose, self._last_keyframe_pose)
+        return (
+            translation >= self.keyframe_distance
+            or rotation >= self.keyframe_rotation
+            or now - self._last_keyframe_at >= self.keyframe_max_interval
+        )
+
+    @staticmethod
+    def _xyz_intensity(msg):
+        offsets = {field.name: field.offset for field in msg.fields}
+        if not all(name in offsets for name in ("x", "y", "z")):
+            return np.empty((0, 4), dtype=np.float32)
+
+        names = ["x", "y", "z"]
+        formats = ["<f4", "<f4", "<f4"]
+        field_offsets = [offsets[name] for name in names]
+        if "intensity" in offsets:
+            names.append("intensity")
+            formats.append("<f4")
+            field_offsets.append(offsets["intensity"])
+
+        dtype = np.dtype(
+            {
+                "names": names,
+                "formats": formats,
+                "offsets": field_offsets,
+                "itemsize": msg.point_step,
+            }
+        )
+        count = int(msg.width) * int(msg.height)
+        raw = np.frombuffer(msg.data, dtype=dtype, count=count)
+        result = np.empty((count, 4), dtype=np.float32)
+        result[:, 0] = raw["x"]
+        result[:, 1] = raw["y"]
+        result[:, 2] = raw["z"]
+        result[:, 3] = raw["intensity"] if "intensity" in names else 0.0
+        return result
+
+    def _cloud_callback(self, msg):
+        now = time.monotonic()
+        self._last_cloud_at = now
+        self._received_scan_count += 1
+        if msg.header.frame_id:
+            self._map_frame = msg.header.frame_id
+        if not self._accept_keyframe(now):
+            self._rejected_scan_count += 1
+            return
+
+        points = self._xyz_intensity(msg)
+        if points.size == 0:
+            return
+
+        finite = np.isfinite(points[:, :3]).all(axis=1)
+        if self.max_range > 0:
+            if self._latest_odom is not None:
+                sensor_position = np.array(
+                    [
+                        self._latest_odom["x"],
+                        self._latest_odom["y"],
+                        self._latest_odom["z"],
+                    ],
+                    dtype=np.float32,
+                )
+                ranges = np.linalg.norm(points[:, :3] - sensor_position, axis=1)
+            else:
+                ranges = np.linalg.norm(points[:, :3], axis=1)
+            finite &= ranges <= self.max_range
+        points = points[finite]
+        if points.size == 0:
+            return
+
+        voxel_keys = np.floor(points[:, :3] / self.voxel_size).astype(np.int32)
+        _, unique_indices = np.unique(voxel_keys, axis=0, return_index=True)
+        voxel_keys = voxel_keys[unique_indices]
+        points = points[unique_indices]
+
+        with self._lock:
+            available = max(0, self.max_points - len(self._voxels))
+            for key, point in zip(voxel_keys, points):
+                packed_key = (int(key[0]), int(key[1]), int(key[2]))
+                previous = self._voxels.get(packed_key)
+                if previous is not None:
+                    hits = self._voxel_hits.get(packed_key, 1) + 1
+                    # Média limitada: reduz ruído sem permitir que deriva tardia
+                    # arraste indefinidamente uma superfície já consolidada.
+                    weight = 1.0 / min(hits, 8)
+                    self._voxels[packed_key] = tuple(
+                        float(previous[index] * (1.0 - weight) + point[index] * weight)
+                        for index in range(4)
+                    )
+                    self._voxel_hits[packed_key] = hits
+                    self._merged_point_count += 1
+                elif available > 0:
+                    available -= 1
+                    self._voxels[packed_key] = (
+                        float(point[0]),
+                        float(point[1]),
+                        float(point[2]),
+                        float(point[3]),
+                    )
+                    self._voxel_hits[packed_key] = 1
+            self._scan_count += 1
+            self._received_points += int(points.shape[0])
+        if self._latest_odom is not None:
+            self._last_keyframe_pose = dict(self._latest_odom)
+        self._last_keyframe_at = now
+
+    def _snapshot(self, limit=None):
+        with self._lock:
+            values = [
+                point
+                for key, point in self._voxels.items()
+                if self._voxel_hits.get(key, 0) >= self.min_voxel_hits
+            ]
+        if not values:
+            return np.empty((0, 4), dtype=np.float32)
+        points = np.asarray(values, dtype=np.float32)
+        if limit and points.shape[0] > limit:
+            indices = np.linspace(0, points.shape[0] - 1, limit, dtype=np.int64)
+            points = points[indices]
+        return points
+
+    @staticmethod
+    def _to_cloud(points, stamp, frame_id):
+        msg = PointCloud2()
+        msg.header.stamp = stamp
+        msg.header.frame_id = frame_id
+        msg.height = 1
+        msg.width = int(points.shape[0])
+        msg.fields = [
+            PointField(name="x", offset=0, datatype=PointField.FLOAT32, count=1),
+            PointField(name="y", offset=4, datatype=PointField.FLOAT32, count=1),
+            PointField(name="z", offset=8, datatype=PointField.FLOAT32, count=1),
+            PointField(
+                name="intensity", offset=12, datatype=PointField.FLOAT32, count=1
+            ),
+        ]
+        msg.is_bigendian = False
+        msg.point_step = 16
+        msg.row_step = msg.point_step * msg.width
+        msg.is_dense = True
+        msg.data = np.ascontiguousarray(points, dtype="<f4").tobytes()
+        return msg
+
+    def publish_map(self):
+        points = self._snapshot(self.publish_max_points)
+        if points.size:
+            self.map_pub.publish(
+                self._to_cloud(
+                    points,
+                    self.get_clock().now().to_msg(),
+                    self._map_frame,
+                )
+            )
+
+    def status_dict(self):
+        with self._lock:
+            point_count = sum(
+                self._voxel_hits.get(key, 0) >= self.min_voxel_hits
+                for key in self._voxels
+            )
+            scan_count = self._scan_count
+        return {
+            "mapping": True,
+            "lidar_connected": time.monotonic() - self._last_cloud_at < 1.5,
+            "imu_connected": time.monotonic() - self._last_imu_at < 0.3,
+            "lio_connected": (
+                time.monotonic() - self._last_cloud_at < 1.5
+                and time.monotonic() - self._last_imu_at < 0.3
+                and time.monotonic() - self._last_odom_at < 0.25
+                and time.monotonic() - self._last_odom_jump_at >= 1.0
+            ),
+            "robot_connected": time.monotonic() - self._last_odom_at < 0.25,
+            "sport_state_connected": (
+                time.monotonic() - self._last_sport_state_at < 0.5
+            ),
+            "control_armed": self._control_armed,
+            "moving": self._moving,
+            "last_command": self._last_command,
+            "last_command_age_seconds": (
+                round(time.monotonic() - self._last_command_at, 2)
+                if self._last_command_at
+                else None
+            ),
+            "command_count": self._command_count,
+            "command_counts": dict(self._command_counts),
+            "motion_publish_count": self._motion_publish_count,
+            "motion_publish_rate_hz": round(
+                1.0 / MOTION_PUBLISH_PERIOD_SECONDS
+            ),
+            "active_velocity": {
+                "x": self._active_velocity[0],
+                "y": self._active_velocity[1],
+                "yaw": self._active_velocity[2],
+            },
+            "control_transport": "obstacles_avoid_remote_api",
+            "remote_commands_from_api": self._remote_commands_from_api,
+            "last_remote_response": self._last_remote_response,
+            "last_remote_response_age_seconds": (
+                round(time.monotonic() - self._last_remote_response_at, 2)
+                if self._last_remote_response_at
+                else None
+            ),
+            "last_sport_response": self._last_sport_response,
+            "last_sport_response_age_seconds": (
+                round(time.monotonic() - self._last_sport_response_at, 2)
+                if self._last_sport_response_at
+                else None
+            ),
+            "point_count": point_count,
+            "scan_count": scan_count,
+            "received_scan_count": self._received_scan_count,
+            "rejected_scan_count": self._rejected_scan_count,
+            "merged_point_count": self._merged_point_count,
+            "elapsed_seconds": round(time.monotonic() - self._started_at, 1),
+            "voxel_size": self.voxel_size,
+            "min_voxel_hits": self.min_voxel_hits,
+            "speed_limit_percent": self._speed_percent,
+            "speed_min_percent": MIN_SPEED_PERCENT,
+            "speed_max_percent": MAX_SPEED_PERCENT,
+            "speed_step_percent": SPEED_STEP_PERCENT,
+            "linear_speed_mps": round(
+                MOTION_PROFILES["forward"][0]
+                * self._speed_percent
+                / DEFAULT_SPEED_PERCENT,
+                3,
+            ),
+            "reverse_speed_mps": round(
+                abs(MOTION_PROFILES["backward"][0])
+                * self._speed_percent
+                / DEFAULT_SPEED_PERCENT,
+                3,
+            ),
+            "yaw_speed_radps": round(
+                abs(MOTION_PROFILES["rotate_left"][2])
+                * self._speed_percent
+                / DEFAULT_SPEED_PERCENT,
+                3,
+            ),
+            "frame": self._map_frame,
+            "slam_backend": "Go2 native LIO",
+            "mapping_quality": (
+                "ok"
+                if time.monotonic() - self._last_cloud_at < 1.5
+                and time.monotonic() - self._last_imu_at < 0.3
+                and time.monotonic() - self._last_odom_at < 0.25
+                and time.monotonic() - self._last_odom_jump_at >= 1.0
+                else "degraded"
+            ),
+            "imu": self._latest_imu,
+            "origin": self._origin_odom,
+            "current_pose": self._latest_odom,
+            "current_location": self._current_location(),
+            "posture": self._posture_state,
+            "sport_state": self._latest_sport_state,
+        }
+
+    def publish_status(self):
+        msg = String()
+        msg.data = json.dumps(self.status_dict(), ensure_ascii=False)
+        self.status_pub.publish(msg)
+        status = self.status_dict()
+        self.get_logger().info(
+            "Mapa: %d pontos | %d varreduras | %.1f s"
+            % (
+                status["point_count"],
+                status["scan_count"],
+                status["elapsed_seconds"],
+            ),
+            throttle_duration_sec=5.0,
+        )
+
+    def _safe_name(self, requested=None):
+        if requested:
+            clean = re.sub(r"[^a-zA-Z0-9_-]+", "_", requested).strip("_")
+            if clean:
+                return clean[:80]
+        return "mapa_go2_" + datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    def save_map(self, requested_name=None):
+        points = self._snapshot()
+        if points.shape[0] < 100:
+            raise RuntimeError("nuvem insuficiente para salvar (mínimo: 100 pontos)")
+
+        name = self._safe_name(requested_name)
+        pcd_path = self.maps_directory / (name + ".pcd")
+        metadata_path = self.maps_directory / (name + ".json")
+        temp_pcd = pcd_path.with_suffix(".pcd.tmp")
+        temp_metadata = metadata_path.with_suffix(".json.tmp")
+
+        header = (
+            "# .PCD v0.7 - mapa 3D Unitree Go2\n"
+            "VERSION 0.7\n"
+            "FIELDS x y z intensity\n"
+            "SIZE 4 4 4 4\n"
+            "TYPE F F F F\n"
+            "COUNT 1 1 1 1\n"
+            "WIDTH %d\n"
+            "HEIGHT 1\n"
+            "VIEWPOINT 0 0 0 1 0 0 0\n"
+            "POINTS %d\n"
+            "DATA binary\n" % (points.shape[0], points.shape[0])
+        )
+        with open(temp_pcd, "wb") as stream:
+            stream.write(header.encode("ascii"))
+            stream.write(np.ascontiguousarray(points, dtype="<f4").tobytes())
+
+        xyz = points[:, :3]
+        metadata = {
+            "name": name,
+            "created_at": datetime.now().astimezone().isoformat(),
+            "pcd_file": pcd_path.name,
+            "point_count": int(points.shape[0]),
+            "frame": self._map_frame,
+            "voxel_size_m": self.voxel_size,
+            "bounds_m": {
+                "min": xyz.min(axis=0).round(4).tolist(),
+                "max": xyz.max(axis=0).round(4).tolist(),
+            },
+            "mapping_duration_seconds": round(
+                time.monotonic() - self._started_at, 2
+            ),
+            "scan_count": self._scan_count,
+            "origin_odom": self._origin_odom,
+            "sensor_topics": [
+                self.cloud_topic,
+                self.odom_topic,
+                self.imu_topic,
+            ],
+            "slam_backend": "Go2 native LIO",
+            "raw_sensor_topics": ["/utlidar/cloud", "/utlidar/imu"],
+            "deduplication": "one_centroid_per_voxel",
+            "min_voxel_hits": self.min_voxel_hits,
+            "keyframe_distance_m": self.keyframe_distance,
+            "keyframe_rotation_deg": math.degrees(self.keyframe_rotation),
+            "speed_limit_percent": self._speed_percent,
+        }
+        with open(temp_metadata, "w", encoding="utf-8") as stream:
+            json.dump(metadata, stream, ensure_ascii=False, indent=2)
+            stream.write("\n")
+
+        os.replace(str(temp_pcd), str(pcd_path))
+        os.replace(str(temp_metadata), str(metadata_path))
+        self._last_saved_count = int(points.shape[0])
+        self.get_logger().info("Mapa salvo: %s" % pcd_path)
+        return pcd_path, metadata_path, metadata
+
+    def _save_service(self, _request, response):
+        try:
+            pcd_path, _, metadata = self.save_map()
+            response.success = True
+            response.message = "%s (%d pontos)" % (
+                pcd_path,
+                metadata["point_count"],
+            )
+        except Exception as error:
+            response.success = False
+            response.message = str(error)
+        return response
+
+    def reset_map(self):
+        self.stop_motion()
+        with self._lock:
+            self._voxels.clear()
+            self._voxel_hits.clear()
+            self._scan_count = 0
+            self._received_points = 0
+            self._merged_point_count = 0
+        self._received_scan_count = 0
+        self._rejected_scan_count = 0
+        self._last_keyframe_pose = None
+        self._last_keyframe_at = 0.0
+        self._origin_odom = dict(self._latest_odom) if self._latest_odom else None
+        self._started_at = time.monotonic()
+        self._last_saved_count = -1
+        self.get_logger().warning("Mapa reiniciado pelo operador.")
+
+    def _reset_service(self, _request, response):
+        self.reset_map()
+        response.success = True
+        response.message = "Mapa reiniciado."
+        return response
+
+    def arm_control(self, enabled):
+        enabled = bool(enabled)
+        if enabled:
+            self._set_remote_command_source(True)
+            self._control_armed = True
+        else:
+            self._control_armed = False
+            self.stop_motion()
+            self._set_remote_command_source(False)
+        self.get_logger().warning(
+            "Controle de movimento %s."
+            % ("ARMADO" if enabled else "DESARMADO")
+        )
+
+    def _new_sport_request(self, api_id, parameter=None, noreply=False):
+        self._request_sequence += 1
+        request = Request()
+        request.header.identity.id = self._request_sequence
+        request.header.identity.api_id = api_id
+        request.header.policy.priority = 1
+        request.header.policy.noreply = bool(noreply)
+        if parameter is not None:
+            request.parameter = json.dumps(parameter)
+        return request
+
+    def _new_remote_request(self, api_id, parameter, noreply=False):
+        request = self._new_sport_request(
+            api_id, parameter, noreply=noreply
+        )
+        return request
+
+    def _set_remote_command_source(self, enabled):
+        request = self._new_remote_request(
+            REMOTE_SOURCE_API_ID,
+            {"is_remote_commands_from_api": bool(enabled)},
+        )
+        self.remote_control_pub.publish(request)
+        self._remote_commands_from_api = bool(enabled)
+        self.get_logger().warning(
+            "Fonte remota da API %s."
+            % ("ATIVA" if enabled else "DESATIVADA")
+        )
+
+    def _publish_remote_move(self, vx, vy, vyaw, noreply=False):
+        request = self._new_remote_request(
+            REMOTE_MOVE_API_ID,
+            {
+                "x": float(vx),
+                "y": float(vy),
+                "yaw": float(vyaw),
+                "mode": 0,
+            },
+            noreply=noreply,
+        )
+        self.remote_control_pub.publish(request)
+        self._motion_publish_count += 1
+
+    def move(self, vx=0.0, vy=0.0, vyaw=0.0):
+        with self._control_lock:
+            if not self._control_armed:
+                self.get_logger().warning(
+                    "Movimento ignorado: pressione I para armar o controle.",
+                    throttle_duration_sec=2.0,
+                )
+                return
+            # Limites absolutos correspondem ao nível máximo permitido (50%).
+            vx = max(-0.40, min(0.40, float(vx)))
+            vy = max(-0.30, min(0.30, float(vy)))
+            vyaw = max(-0.55, min(0.55, float(vyaw)))
+            self._active_velocity = (vx, vy, vyaw)
+            self._last_motion_at = time.monotonic()
+            self._moving = any(
+                abs(value) > 1e-4 for value in self._active_velocity
+            )
+            self._publish_remote_move(*self._active_velocity)
+
+    def move_command(self, command):
+        profile = MOTION_PROFILES.get(command)
+        if profile is None:
+            raise ValueError("comando de movimento inválido")
+        if self._posture_state != "standing":
+            raise RuntimeError(
+                "robô está deitado ou mudando de postura; use o botão LEVANTAR"
+            )
+        self._last_command = command
+        self._last_command_at = time.monotonic()
+        self._command_count += 1
+        self._command_counts[command] += 1
+        scale = self._speed_percent / DEFAULT_SPEED_PERCENT
+        self.move(
+            vx=profile[0] * scale,
+            vy=profile[1] * scale,
+            vyaw=profile[2] * scale,
+        )
+
+    def set_speed_percent(self, percent):
+        try:
+            requested = float(percent)
+        except (TypeError, ValueError):
+            raise ValueError("informe uma velocidade entre 10% e 50%")
+        if not math.isfinite(requested):
+            raise ValueError("velocidade inválida")
+        if requested < MIN_SPEED_PERCENT or requested > MAX_SPEED_PERCENT:
+            raise ValueError("a velocidade deve ficar entre 10% e 50%")
+
+        selected = int(
+            round(requested / SPEED_STEP_PERCENT) * SPEED_STEP_PERCENT
+        )
+        # Sempre interrompe o movimento antes de trocar o ganho do comando.
+        self.stop_motion()
+        with self._control_lock:
+            self._speed_percent = selected
+        self.get_logger().warning(
+            "Limite de velocidade alterado para %d%%." % selected
+        )
+        return selected
+
+    def stop_motion(self, force=False):
+        with self._control_lock:
+            now = time.monotonic()
+            if (
+                not force
+                and not self._moving
+                and now - self._last_stop_sent_at < 0.1
+            ):
+                return
+            self._moving = False
+            self._active_velocity = (0.0, 0.0, 0.0)
+            self._last_motion_at = 0.0
+            self._publish_remote_move(0.0, 0.0, 0.0)
+            request = self._new_sport_request(STOP_API_ID)
+            self.sport_pub.publish(request)
+            self._last_stop_sent_at = now
+            self._last_command = "stop"
+            self._last_command_at = now
+
+    def set_posture(self, posture):
+        if not self._control_armed:
+            raise PermissionError(
+                "controle bloqueado; habilite-o antes de mudar a postura"
+            )
+        if (
+            self._posture_target
+            and time.monotonic() - self._posture_command_at
+            < POSTURE_TRANSITION_SECONDS
+        ):
+            raise RuntimeError("aguarde a mudança de postura terminar")
+        api_ids = {
+            "stand_up": STAND_UP_API_ID,
+            "stand_down": STAND_DOWN_API_ID,
+        }
+        if posture not in api_ids:
+            raise ValueError("comando de postura inválido")
+
+        self.stop_motion()
+        request = self._new_sport_request(api_ids[posture])
+        self.sport_pub.publish(request)
+        self._posture_target = "up" if posture == "stand_up" else "down"
+        self._posture_command_at = time.monotonic()
+        self._posture_state = "transitioning_" + self._posture_target
+        self.get_logger().warning(
+            "Comando de postura enviado: %s."
+            % ("LEVANTAR" if posture == "stand_up" else "DEITAR")
+        )
+
+    def toggle_posture(self):
+        if self._posture_state.startswith("transitioning_"):
+            raise RuntimeError("aguarde a mudança de postura terminar")
+        if self._posture_state in ("standing", "transitioning_up"):
+            self.set_posture("stand_down")
+            return "stand_down"
+        self.set_posture("stand_up")
+        return "stand_up"
+
+    def _motion_watchdog(self):
+        with self._control_lock:
+            if not self._moving:
+                return
+            if (
+                not self._control_armed
+                or time.monotonic() - self._last_motion_at
+                > MOTION_WATCHDOG_SECONDS
+            ):
+                self._moving = False
+                self._active_velocity = (0.0, 0.0, 0.0)
+                self._last_motion_at = 0.0
+                self._publish_remote_move(0.0, 0.0, 0.0)
+                request = self._new_sport_request(STOP_API_ID)
+                self.sport_pub.publish(request)
+                self._last_stop_sent_at = time.monotonic()
+                self._last_command = "stop"
+                self._last_command_at = self._last_stop_sent_at
+                return
+            self._publish_remote_move(
+                *self._active_velocity, noreply=True
+            )
+
+    def shutdown_safely(self):
+        if self._shutdown_started:
+            return
+        self._shutdown_started = True
+        self.arm_control(False)
+        for _ in range(3):
+            self.stop_motion(force=True)
+            time.sleep(0.03)
+        with self._lock:
+            current_count = len(self._voxels)
+        if current_count >= 100 and current_count != self._last_saved_count:
+            try:
+                self.save_map("autosave_" + datetime.now().strftime("%Y%m%d_%H%M%S"))
+            except Exception as error:
+                self.get_logger().error("Falha no autosave: %s" % error)
+
+
+class KeyboardController:
+    HELP = """
+Controles de mapeamento (limite de velocidade: 30%)
+  I             armar movimento
+  O             desarmar movimento
+  W/S ou ↑/↓    avançar / recuar
+  A/D ou ←/→    girar para esquerda / direita
+  Espaço        parada imediata
+  P             salvar mapa agora
+  C             limpar e reiniciar o mapa
+  H             mostrar esta ajuda
+  Esc           salvar e sair
+
+Segure a tecla de movimento. O watchdog para o robô em 0,35 s se os comandos
+deixarem de chegar. Mantenha uma pessoa junto ao robô e o caminho livre.
+"""
+
+    def __init__(self, node):
+        self.node = node
+        self._thread = None
+        self._stop = threading.Event()
+        self._old_term = None
+        self._old_flags = None
+
+    def start(self):
+        if not sys.stdin.isatty():
+            self.node.get_logger().warning(
+                "Terminal não interativo: teleop por teclado desativado."
+            )
+            return
+        print(self.HELP, flush=True)
+        fd = sys.stdin.fileno()
+        self._old_term = termios.tcgetattr(fd)
+        self._old_flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+        tty.setcbreak(fd)
+        fcntl.fcntl(fd, fcntl.F_SETFL, self._old_flags | os.O_NONBLOCK)
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def _run(self):
+        fd = sys.stdin.fileno()
+        while not self._stop.is_set() and rclpy.ok():
+            readable, _, _ = select.select([sys.stdin], [], [], 0.1)
+            if not readable:
+                continue
+            try:
+                token = os.read(fd, 8).decode("utf-8", errors="ignore")
+            except BlockingIOError:
+                continue
+            if not token:
+                continue
+            self._handle(token)
+
+    def _handle(self, token):
+        lower = token.lower()
+        if token.startswith("\x1b["):
+            if "A" in token:
+                self.node.move_command("forward")
+            elif "B" in token:
+                self.node.move_command("backward")
+            elif "D" in token:
+                self.node.move_command("rotate_left")
+            elif "C" in token:
+                self.node.move_command("rotate_right")
+            return
+        if token == "\x1b":
+            self.node.shutdown_safely()
+            rclpy.shutdown()
+        elif lower == "i":
+            self.node.arm_control(True)
+        elif lower == "o":
+            self.node.arm_control(False)
+        elif lower == "w":
+            self.node.move_command("forward")
+        elif lower == "s":
+            self.node.move_command("backward")
+        elif lower == "a":
+            self.node.move_command("rotate_left")
+        elif lower == "d":
+            self.node.move_command("rotate_right")
+        elif token == " ":
+            self.node.stop_motion()
+        elif lower == "p":
+            try:
+                self.node.save_map()
+            except Exception as error:
+                self.node.get_logger().error(str(error))
+        elif lower == "c":
+            self.node.reset_map()
+        elif lower == "h":
+            print(self.HELP, flush=True)
+
+    def close(self):
+        self._stop.set()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=0.3)
+        if self._old_term is not None:
+            termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, self._old_term)
+        if self._old_flags is not None:
+            fcntl.fcntl(sys.stdin.fileno(), fcntl.F_SETFL, self._old_flags)
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = Go2MappingNode()
+    keyboard = KeyboardController(node)
+    if bool(node.get_parameter("interactive").value):
+        keyboard.start()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        keyboard.close()
+        node.shutdown_safely()
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()

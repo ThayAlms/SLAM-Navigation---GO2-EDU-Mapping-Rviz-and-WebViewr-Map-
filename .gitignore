@@ -1,0 +1,18 @@
+# Históricos de dependências clonadas dentro do projeto
+**/.git/
+
+# Saídas recompiláveis do ROS, CMake e Python
+**/build/
+**/install/
+slam_ws/log/
+go2_native_ws/unitree_ros2/cyclonedds_ws/log/
+**/__pycache__/
+*.py[cod]
+*.o
+*.tmp
+
+# Arquivos temporários de editores e sistema
+*~
+.DS_Store
+.idea/
+.vscode/

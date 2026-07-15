@@ -1,0 +1,278 @@
+#!/usr/bin/env python3
+"""Servidor local do painel: ROS 2, mapa 3D, câmera MJPEG e teleop seguro."""
+
+import argparse
+import json
+import signal
+import sys
+import threading
+import time
+from http import HTTPStatus
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import urlparse
+
+import cv2
+import numpy as np
+import rclpy
+from rclpy.executors import SingleThreadedExecutor
+
+ROOT = Path(__file__).resolve().parent
+SLAM_DIR = ROOT.parent / "go2_native_ws" / "go2_slam"
+sys.path.insert(0, str(SLAM_DIR))
+
+from mapping_node import Go2MappingNode  # noqa: E402
+
+
+class CameraStream:
+    PIPELINE = (
+        "udpsrc address=230.1.1.1 port=1720 multicast-iface=eth0 "
+        'caps="application/x-rtp,media=video,encoding-name=H264,clock-rate=90000" ! '
+        "rtph264depay ! h264parse ! avdec_h264 ! videoconvert ! "
+        "video/x-raw,format=BGR ! appsink drop=true max-buffers=1 sync=false"
+    )
+
+    def __init__(self):
+        self.condition = threading.Condition()
+        self.jpeg = None
+        self.sequence = 0
+        self.connected = False
+        self.stop_event = threading.Event()
+        self.thread = threading.Thread(target=self._run, name="go2-camera", daemon=True)
+
+    def start(self):
+        self.thread.start()
+
+    def _run(self):
+        while not self.stop_event.is_set():
+            capture = cv2.VideoCapture(self.PIPELINE, cv2.CAP_GSTREAMER)
+            if not capture.isOpened():
+                self.connected = False
+                time.sleep(1.0)
+                continue
+            failures = 0
+            while not self.stop_event.is_set():
+                ok, frame = capture.read()
+                if not ok:
+                    failures += 1
+                    self.connected = False
+                    if failures > 20:
+                        break
+                    time.sleep(0.03)
+                    continue
+                failures = 0
+                self.connected = True
+                encoded, buffer = cv2.imencode(
+                    ".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 76]
+                )
+                if not encoded:
+                    continue
+                with self.condition:
+                    self.jpeg = buffer.tobytes()
+                    self.sequence += 1
+                    self.condition.notify_all()
+            capture.release()
+            time.sleep(0.25)
+
+    def wait_frame(self, last_sequence, timeout=2.0):
+        with self.condition:
+            self.condition.wait_for(
+                lambda: self.sequence != last_sequence or self.stop_event.is_set(),
+                timeout=timeout,
+            )
+            return self.sequence, self.jpeg
+
+    def close(self):
+        self.stop_event.set()
+        with self.condition:
+            self.condition.notify_all()
+        self.thread.join(timeout=2.0)
+
+
+class DashboardRuntime:
+    def __init__(self):
+        rclpy.init()
+        self.node = Go2MappingNode()
+        self.camera = CameraStream()
+        self.executor = SingleThreadedExecutor()
+        self.executor.add_node(self.node)
+        self.ros_thread = threading.Thread(target=self.executor.spin, name="go2-ros", daemon=True)
+
+    def start(self):
+        self.camera.start()
+        self.ros_thread.start()
+
+    def close(self):
+        self.node.shutdown_safely()
+        self.camera.close()
+        self.executor.shutdown()
+        self.node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+        self.ros_thread.join(timeout=2.0)
+
+    def status(self):
+        status = self.node.status_dict()
+        status["camera_connected"] = self.camera.connected
+        return status
+
+    def map_points(self):
+        points = self.node._snapshot(15000)
+        if points.size == 0:
+            return []
+        xyz = np.round(points[:, :3], 3)
+        return xyz.reshape(-1).tolist()
+
+
+class DashboardHandler(SimpleHTTPRequestHandler):
+    server_version = "Go2Dashboard/1.0"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=str(ROOT), **kwargs)
+
+    @property
+    def runtime(self):
+        return self.server.runtime
+
+    def log_message(self, fmt, *args):
+        if self.path.startswith("/api/"):
+            return
+        super().log_message(fmt, *args)
+
+    def _json(self, payload, status=HTTPStatus.OK):
+        data = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _body(self):
+        length = min(int(self.headers.get("Content-Length", "0")), 16384)
+        if not length:
+            return {}
+        return json.loads(self.rfile.read(length).decode("utf-8"))
+
+    def do_GET(self):
+        path = urlparse(self.path).path
+        if path == "/api/status":
+            self._json(self.runtime.status())
+        elif path == "/api/map/points":
+            self._json({"points": self.runtime.map_points()})
+        elif path == "/camera.mjpg":
+            self._mjpeg()
+        else:
+            super().do_GET()
+
+    def do_POST(self):
+        path = urlparse(self.path).path
+        try:
+            body = self._body()
+            if path == "/api/control/arm":
+                armed = bool(body.get("armed", False))
+                self.runtime.node.arm_control(armed)
+                self._json({"ok": True, "armed": armed})
+            elif path == "/api/control/move":
+                self._move(str(body.get("command", "stop")))
+            elif path == "/api/control/posture":
+                self._posture(str(body.get("command", "")))
+            elif path == "/api/control/speed":
+                percent = self.runtime.node.set_speed_percent(
+                    body.get("percent")
+                )
+                self._json({"ok": True, "speed_percent": percent})
+            elif path == "/api/control/stop":
+                self.runtime.node.arm_control(False)
+                self.runtime.node.stop_motion()
+                self._json({"ok": True})
+            elif path == "/api/map/reset":
+                self.runtime.node.reset_map()
+                self._json({"ok": True})
+            elif path == "/api/map/save":
+                _, _, metadata = self.runtime.node.save_map()
+                self._json({"ok": True, **metadata})
+            else:
+                self._json({"ok": False, "error": "rota inexistente"}, HTTPStatus.NOT_FOUND)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            pass
+        except Exception as error:
+            self._json({"ok": False, "error": str(error)}, HTTPStatus.BAD_REQUEST)
+
+    def _move(self, command):
+        if command != "stop" and not self.runtime.node._control_armed:
+            raise PermissionError("controle bloqueado; habilite-o antes de mover")
+        if command == "stop":
+            self.runtime.node.stop_motion()
+        else:
+            self.runtime.node.move_command(command)
+        self._json({"ok": True, "command": command})
+
+    def _posture(self, command):
+        actual = command
+        if command == "toggle":
+            actual = self.runtime.node.toggle_posture()
+        else:
+            self.runtime.node.set_posture(command)
+        self._json({"ok": True, "command": actual})
+
+    def _mjpeg(self):
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+        self.send_header("Pragma", "no-cache")
+        self.end_headers()
+        sequence = -1
+        try:
+            while True:
+                sequence, jpeg = self.runtime.camera.wait_frame(sequence)
+                if jpeg is None:
+                    continue
+                self.wfile.write(b"--frame\r\n")
+                self.wfile.write(b"Content-Type: image/jpeg\r\n")
+                self.wfile.write(("Content-Length: %d\r\n\r\n" % len(jpeg)).encode("ascii"))
+                self.wfile.write(jpeg)
+                self.wfile.write(b"\r\n")
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            pass
+
+
+class DashboardServer(ThreadingHTTPServer):
+    daemon_threads = True
+    allow_reuse_address = True
+
+    def __init__(self, address, runtime):
+        self.runtime = runtime
+        super().__init__(address, DashboardHandler)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8080)
+    args = parser.parse_args()
+
+    runtime = DashboardRuntime()
+    runtime.start()
+    server = DashboardServer((args.host, args.port), runtime)
+
+    stop_event = threading.Event()
+
+    def stop(_signum=None, _frame=None):
+        if stop_event.is_set():
+            return
+        stop_event.set()
+        threading.Thread(target=server.shutdown, daemon=True).start()
+
+    signal.signal(signal.SIGINT, stop)
+    signal.signal(signal.SIGTERM, stop)
+    print("Painel Go2 ativo em http://%s:%d" % (args.host, args.port), flush=True)
+    try:
+        server.serve_forever(poll_interval=0.25)
+    finally:
+        server.server_close()
+        runtime.close()
+
+
+if __name__ == "__main__":
+    main()
