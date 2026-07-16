@@ -16,7 +16,7 @@ O nó acumula a nuvem já corrigida pelo LIO nativo do robô,
 7. Pressione `P` para salvar. `Esc` ou `Ctrl+C` faz um autosave e encerra.
 
 O teleop é limitado a 0,22 m/s e 0,35 rad/s, cerca de 30% do perfil normal. Um
-watchdog envia parada se os comandos deixarem de chegar por 0,35 segundo.
+watchdog envia parada se os comandos deixarem de chegar por 0,25 segundo.
 
 Nesta configuração são usados o LiDAR, o LIO e a IMU originais do Go2. Por isso
 o desvio de obstáculos nativo não é desativado; a regra de desativá-lo só faria

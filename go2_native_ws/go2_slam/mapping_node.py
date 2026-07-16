@@ -43,7 +43,11 @@ REMOTE_AVOIDANCE_SWITCH_SET_API_ID = 1001
 REMOTE_AVOIDANCE_SWITCH_GET_API_ID = 1002
 POSTURE_TRANSITION_SECONDS = 4.0
 MOTION_PUBLISH_PERIOD_SECONDS = 0.02
-MOTION_WATCHDOG_SECONDS = 0.35
+MOTION_WATCHDOG_SECONDS = 0.25
+AVOIDANCE_CONFIRMATION_TIMEOUT_SECONDS = 5.0
+REMOTE_SOURCE_CONFIRMATION_TIMEOUT_SECONDS = 5.0
+OBSTACLE_STOP_GRACE_SECONDS = 0.65
+OBSTACLE_STOP_CONFIRM_SECONDS = 0.30
 DEFAULT_SPEED_PERCENT = 55
 MIN_SPEED_PERCENT = 5
 MAX_SPEED_PERCENT = 100
@@ -60,6 +64,9 @@ MOTION_PROFILES = {
 
 SAFETY_REASON_MESSAGES = {
     "native_avoidance_unconfirmed": "anticolisão nativo ainda não confirmado",
+    "remote_source_unconfirmed": "canal remoto seguro ainda não confirmado",
+    "sport_state_unavailable": "estado de movimento do robô indisponível",
+    "native_obstacle_limit": "limite de obstáculo detectado",
 }
 
 
@@ -68,11 +75,11 @@ class Go2MappingNode(Node):
         super().__init__("go2_slam_mapping")
 
         default_maps = str(Path(__file__).resolve().parent.parent / "maps")
-        self.declare_parameter("voxel_size", 0.06)
+        self.declare_parameter("voxel_size", 0.05)
         self.declare_parameter("min_voxel_hits", 2)
         self.declare_parameter("max_range", 20.0)
-        self.declare_parameter("max_points", 500000)
-        self.declare_parameter("publish_max_points", 120000)
+        self.declare_parameter("max_points", 600000)
+        self.declare_parameter("publish_max_points", 150000)
         self.declare_parameter("cloud_topic", "/utlidar/cloud_deskewed")
         self.declare_parameter("odom_topic", "/utlidar/robot_odom")
         self.declare_parameter("imu_topic", "/utlidar/imu")
@@ -164,12 +171,22 @@ class Go2MappingNode(Node):
         self._request_sequence = time.monotonic_ns()
         self._remote_commands_from_api = False
         self._native_avoidance_enabled = None
+        self._native_avoidance_confirmed_at = 0.0
+        self._remote_source_confirmed_at = 0.0
+        self._remote_source_requests = {}
         self._last_avoidance_request_at = 0.0
         self._last_sport_response = None
         self._last_sport_response_at = 0.0
         self._last_remote_response = None
         self._last_remote_response_at = 0.0
+        self._last_avoidance_response = None
+        self._last_remote_source_response = None
         self._moving = False
+        self._motion_started_at = 0.0
+        self._obstacle_stall_started_at = 0.0
+        self._safety_blocked = False
+        self._safety_block_reason = None
+        self._safety_blocked_at = 0.0
         self._shutdown_started = False
 
         map_qos = QoSProfile(
@@ -382,16 +399,18 @@ class Go2MappingNode(Node):
         status_code = int(msg.header.status.code)
         data = str(msg.data)
         self._last_remote_response_at = time.monotonic()
-        self._last_remote_response = {
+        response_info = {
             "request_id": int(msg.header.identity.id),
             "api_id": api_id,
             "status_code": status_code,
             "data": data,
         }
+        self._last_remote_response = response_info
         if api_id in {
             REMOTE_AVOIDANCE_SWITCH_SET_API_ID,
             REMOTE_AVOIDANCE_SWITCH_GET_API_ID,
         }:
+            self._last_avoidance_response = response_info
             enabled = api_id == REMOTE_AVOIDANCE_SWITCH_SET_API_ID
             if data:
                 try:
@@ -402,10 +421,41 @@ class Go2MappingNode(Node):
             self._native_avoidance_enabled = (
                 enabled if status_code == 0 else False
             )
+            self._native_avoidance_confirmed_at = (
+                self._last_remote_response_at
+                if self._native_avoidance_enabled
+                else 0.0
+            )
+        elif api_id == REMOTE_SOURCE_API_ID:
+            self._last_remote_source_response = response_info
+            request_id = int(msg.header.identity.id)
+            requested = self._remote_source_requests.pop(request_id, None)
+            if requested is not None and status_code == 0:
+                self._remote_commands_from_api = requested
+                self._remote_source_confirmed_at = (
+                    self._last_remote_response_at if requested else 0.0
+                )
+            elif status_code != 0:
+                self._remote_commands_from_api = False
+                self._remote_source_confirmed_at = 0.0
 
     def _native_avoidance_ready(self, now=None):
-        del now
-        return self._native_avoidance_enabled is True
+        now = time.monotonic() if now is None else now
+        return (
+            self._native_avoidance_enabled is True
+            and self._native_avoidance_confirmed_at > 0.0
+            and now - self._native_avoidance_confirmed_at
+            <= AVOIDANCE_CONFIRMATION_TIMEOUT_SECONDS
+        )
+
+    def _remote_source_ready(self, now=None):
+        now = time.monotonic() if now is None else now
+        return (
+            self._remote_commands_from_api is True
+            and self._remote_source_confirmed_at > 0.0
+            and now - self._remote_source_confirmed_at
+            <= REMOTE_SOURCE_CONFIRMATION_TIMEOUT_SECONDS
+        )
 
     def _ensure_native_obstacle_avoidance(self):
         now = time.monotonic()
@@ -425,13 +475,53 @@ class Go2MappingNode(Node):
                     None,
                 )
             )
+        remote_source_age = now - self._remote_source_confirmed_at
+        if self._control_armed and (
+            not self._remote_source_ready(now)
+            or remote_source_age > REMOTE_SOURCE_CONFIRMATION_TIMEOUT_SECONDS / 2
+        ):
+            self._set_remote_command_source(True)
         self._last_avoidance_request_at = now
 
     def _movement_safety_reason(self, vx, vy, vyaw):
         del vx, vy, vyaw
-        if not self._native_avoidance_ready():
+        now = time.monotonic()
+        if not self._native_avoidance_ready(now):
             return "native_avoidance_unconfirmed"
+        if self._control_armed and not self._remote_source_ready(now):
+            return "remote_source_unconfirmed"
+        if now - self._last_sport_state_at > 0.5:
+            return "sport_state_unavailable"
         return None
+
+    def _native_motion_stalled(self, now):
+        if not self._moving or now - self._motion_started_at < OBSTACLE_STOP_GRACE_SECONDS:
+            self._obstacle_stall_started_at = 0.0
+            return False
+        if self._latest_sport_state is None or now - self._last_sport_state_at > 0.25:
+            self._obstacle_stall_started_at = 0.0
+            return False
+
+        vx, vy, vyaw = self._active_velocity
+        actual = self._latest_sport_state.get("velocity", [0.0, 0.0, 0.0])
+        linear_command = math.hypot(vx, vy)
+        if linear_command > 0.01 and len(actual) >= 2:
+            progress = math.hypot(actual[0], actual[1])
+            threshold = max(0.008, linear_command * 0.18)
+        elif abs(vyaw) > 0.02:
+            progress = abs(self._latest_sport_state.get("yaw_speed", 0.0))
+            threshold = max(0.015, abs(vyaw) * 0.15)
+        else:
+            self._obstacle_stall_started_at = 0.0
+            return False
+
+        if progress > threshold:
+            self._obstacle_stall_started_at = 0.0
+            return False
+        if not self._obstacle_stall_started_at:
+            self._obstacle_stall_started_at = now
+            return False
+        return now - self._obstacle_stall_started_at >= OBSTACLE_STOP_CONFIRM_SECONDS
 
     @staticmethod
     def _quaternion_distance(first, second):
@@ -644,6 +734,10 @@ class Go2MappingNode(Node):
     def status_dict(self):
         now = time.monotonic()
         native_avoidance_ready = self._native_avoidance_ready(now)
+        remote_source_ready = self._remote_source_ready(now)
+        safety_ready = native_avoidance_ready and (
+            not self._control_armed or remote_source_ready
+        )
         with self._lock:
             point_count = sum(
                 self._voxel_hits.get(key, 0) >= self.min_voxel_hits
@@ -687,9 +781,24 @@ class Go2MappingNode(Node):
             "safety_mode": "unitree_native_obstacles_avoid",
             "obstacle_avoidance_enabled": native_avoidance_ready,
             "native_avoidance_switch": self._native_avoidance_enabled,
-            "safety_ready": native_avoidance_ready,
-            "safety_blocked": False,
+            "native_avoidance_confirmed": native_avoidance_ready,
+            "native_avoidance_confirmation_age_seconds": (
+                round(now - self._native_avoidance_confirmed_at, 2)
+                if self._native_avoidance_confirmed_at
+                else None
+            ),
+            "safety_ready": safety_ready,
+            "safety_blocked": self._safety_blocked,
+            "safety_block_reason": self._safety_block_reason,
+            "safety_block_age_seconds": (
+                round(now - self._safety_blocked_at, 2)
+                if self._safety_blocked_at
+                else None
+            ),
             "remote_commands_from_api": self._remote_commands_from_api,
+            "remote_source_confirmed": remote_source_ready,
+            "last_avoidance_response": self._last_avoidance_response,
+            "last_remote_source_response": self._last_remote_source_response,
             "last_remote_response": self._last_remote_response,
             "last_remote_response_age_seconds": (
                 round(time.monotonic() - self._last_remote_response_at, 2)
@@ -884,8 +993,8 @@ class Go2MappingNode(Node):
                 raise RuntimeError(
                     "controle bloqueado: anticolisão nativo não confirmado"
                 )
-            self._set_remote_command_source(True)
             self._control_armed = True
+            self._set_remote_command_source(True)
         else:
             self._control_armed = False
             self.stop_motion()
@@ -916,8 +1025,15 @@ class Go2MappingNode(Node):
             REMOTE_SOURCE_API_ID,
             {"is_remote_commands_from_api": bool(enabled)},
         )
+        request_id = int(request.header.identity.id)
+        self._remote_source_requests[request_id] = bool(enabled)
+        if len(self._remote_source_requests) > 20:
+            oldest = next(iter(self._remote_source_requests))
+            self._remote_source_requests.pop(oldest, None)
         self.remote_control_pub.publish(request)
-        self._remote_commands_from_api = bool(enabled)
+        if not enabled:
+            self._remote_commands_from_api = False
+            self._remote_source_confirmed_at = 0.0
 
     def _publish_remote_move(self, vx, vy, vyaw, noreply=False):
         request = self._new_remote_request(
@@ -954,7 +1070,10 @@ class Go2MappingNode(Node):
                     )
                 )
             self._active_velocity = (vx, vy, vyaw)
-            self._last_motion_at = time.monotonic()
+            now = time.monotonic()
+            if not self._moving:
+                self._motion_started_at = now
+            self._last_motion_at = now
             self._moving = any(
                 abs(value) > 1e-4 for value in self._active_velocity
             )
@@ -978,6 +1097,10 @@ class Go2MappingNode(Node):
             )
         self._last_command = command
         self._last_command_at = time.monotonic()
+        self._safety_blocked = False
+        self._safety_block_reason = None
+        self._safety_blocked_at = 0.0
+        self._obstacle_stall_started_at = 0.0
         self._command_count += 1
         self._command_counts[command] += 1
         self.move(
@@ -1020,6 +1143,8 @@ class Go2MappingNode(Node):
             self._moving = False
             self._active_velocity = (0.0, 0.0, 0.0)
             self._last_motion_at = 0.0
+            self._motion_started_at = 0.0
+            self._obstacle_stall_started_at = 0.0
             self._publish_remote_move(0.0, 0.0, 0.0)
             request = self._new_sport_request(STOP_API_ID)
             self.sport_pub.publish(request)
@@ -1069,23 +1194,39 @@ class Go2MappingNode(Node):
         with self._control_lock:
             if not self._moving:
                 return
+            now = time.monotonic()
             safety_reason = self._movement_safety_reason(
                 *self._active_velocity
             )
             if safety_reason:
                 self.stop_motion(force=True)
+                self._safety_blocked = True
+                self._safety_block_reason = safety_reason
+                self._safety_blocked_at = now
                 self.get_logger().error(
-                    "Movimento interrompido: anticolisão nativo indisponível."
+                    "Movimento interrompido: %s."
+                    % SAFETY_REASON_MESSAGES.get(safety_reason, safety_reason)
+                )
+                return
+            if self._native_motion_stalled(now):
+                self.stop_motion(force=True)
+                self._safety_blocked = True
+                self._safety_block_reason = "native_obstacle_limit"
+                self._safety_blocked_at = now
+                self.get_logger().warning(
+                    "Movimento interrompido no limite do anticolisão nativo."
                 )
                 return
             if (
                 not self._control_armed
-                or time.monotonic() - self._last_motion_at
+                or now - self._last_motion_at
                 > MOTION_WATCHDOG_SECONDS
             ):
                 self._moving = False
                 self._active_velocity = (0.0, 0.0, 0.0)
                 self._last_motion_at = 0.0
+                self._motion_started_at = 0.0
+                self._obstacle_stall_started_at = 0.0
                 self._publish_remote_move(0.0, 0.0, 0.0)
                 request = self._new_sport_request(STOP_API_ID)
                 self.sport_pub.publish(request)
@@ -1127,7 +1268,7 @@ Controles de mapeamento (velocidade ajustável: 5% a 100%)
   H             mostrar esta ajuda
   Esc           salvar e sair
 
-Segure a tecla de movimento. O watchdog para o robô em 0,35 s se os comandos
+Segure a tecla de movimento. O watchdog para o robô em 0,25 s se os comandos
 deixarem de chegar. A locomoção usa o anticolisão nativo do Go2. Mantenha
 supervisão presencial e caminho livre.
 """

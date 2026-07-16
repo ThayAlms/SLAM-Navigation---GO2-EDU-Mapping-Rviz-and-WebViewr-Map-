@@ -28,16 +28,27 @@ function PointCloudMap({ points, pose }) {
       context.clearRect(0, 0, rect.width, rect.height);
       if (!points || points.length < 3) return;
 
+      const cloud = [];
       let minX = Infinity;
       let maxX = -Infinity;
       let minY = Infinity;
       let maxY = -Infinity;
+      let minZ = Infinity;
+      let maxZ = -Infinity;
       for (let index = 0; index < points.length; index += 3) {
-        minX = Math.min(minX, points[index]);
-        maxX = Math.max(maxX, points[index]);
-        minY = Math.min(minY, points[index + 1]);
-        maxY = Math.max(maxY, points[index + 1]);
+        const x = Number(points[index]);
+        const y = Number(points[index + 1]);
+        const z = Number(points[index + 2]);
+        if (![x, y, z].every(Number.isFinite)) continue;
+        cloud.push({ x, y, z });
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
+        minZ = Math.min(minZ, z);
+        maxZ = Math.max(maxZ, z);
       }
+      if (!cloud.length) return;
 
       const centerX = (minX + maxX) / 2;
       const centerY = (minY + maxY) / 2;
@@ -62,19 +73,47 @@ function PointCloudMap({ points, pose }) {
         };
       }
 
-      const projected = [];
-      for (let index = 0; index < points.length; index += 3) {
-        projected.push(project(points[index], points[index + 1], points[index + 2]));
+      const rawGridStep = extent / 8;
+      const gridMagnitude = 10 ** Math.floor(Math.log10(rawGridStep));
+      const gridRatio = rawGridStep / gridMagnitude;
+      const gridStep = (gridRatio < 2 ? 1 : gridRatio < 5 ? 2 : 5) * gridMagnitude;
+      const gridRadius = Math.ceil(extent / gridStep / 2) + 1;
+      context.lineWidth = 1;
+      for (let offset = -gridRadius; offset <= gridRadius; offset += 1) {
+        const value = offset * gridStep;
+        const xStart = project(centerX + value, centerY - extent, minZ);
+        const xEnd = project(centerX + value, centerY + extent, minZ);
+        const yStart = project(centerX - extent, centerY + value, minZ);
+        const yEnd = project(centerX + extent, centerY + value, minZ);
+        context.strokeStyle = offset === 0
+          ? "rgba(117, 214, 156, .25)"
+          : "rgba(42, 169, 224, .09)";
+        context.beginPath();
+        context.moveTo(xStart.x, xStart.y);
+        context.lineTo(xEnd.x, xEnd.y);
+        context.stroke();
+        context.beginPath();
+        context.moveTo(yStart.x, yStart.y);
+        context.lineTo(yEnd.x, yEnd.y);
+        context.stroke();
       }
+
+      const projected = cloud.map((point) => project(point.x, point.y, point.z));
       projected.sort((first, second) => first.depth - second.depth);
 
+      const heightExtent = Math.max(maxZ - minZ, 0.25);
+      const pointSize = Math.max(1.8, Math.min(3.2, 44 / Math.sqrt(projected.length)));
+      const minimumDepth = projected[0]?.depth || 0;
+      const maximumDepth = projected[projected.length - 1]?.depth || minimumDepth + 1;
+      const depthExtent = Math.max(maximumDepth - minimumDepth, 0.1);
       for (const point of projected) {
-        const height = Math.max(0, Math.min(1, (point.z + 0.4) / 2.4));
-        const red = Math.round(42 + height * 160);
-        const green = Math.round(169 + height * 55);
-        const blue = Math.round(224 - height * 120);
-        context.fillStyle = `rgba(${red}, ${green}, ${blue}, .84)`;
-        context.fillRect(point.x, point.y, 1.8, 1.8);
+        const height = Math.max(0, Math.min(1, (point.z - minZ) / heightExtent));
+        const depth = (point.depth - minimumDepth) / depthExtent;
+        const hue = 205 - height * 160;
+        const lightness = 54 + height * 12;
+        const alpha = 0.58 + depth * 0.36;
+        context.fillStyle = `hsla(${hue}, 82%, ${lightness}%, ${alpha})`;
+        context.fillRect(point.x, point.y, pointSize, pointSize);
       }
 
       if (pose) {
@@ -141,6 +180,11 @@ function PointCloudMap({ points, pose }) {
       onWheel={handleWheel}
     >
       <canvas ref={canvasRef} aria-label="Nuvem de pontos 3D do Go2" />
+      {points?.length >= 3 && (
+        <span className="map-point-count">
+          {Math.floor(points.length / 3).toLocaleString("pt-BR")} pontos ao vivo
+        </span>
+      )}
       {(!points || points.length === 0) && (
         <div className="stream-empty map-empty-state">
           <span className="stream-empty-icon">⌁</span>

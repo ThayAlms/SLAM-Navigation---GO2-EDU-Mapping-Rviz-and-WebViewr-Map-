@@ -179,7 +179,7 @@ Depois do login, o usuário comum entra diretamente nos recursos operacionais pe
 | Levantar / Deitar | mudar postura |
 | `−` / `+` | ajustar velocidade segura |
 
-Para mover, o operador precisa habilitar o controle, o robô precisa estar em pé e o anticolisão nativo precisa estar confirmado. Um heartbeat é enviado enquanto a tecla permanece pressionada; o watchdog do gateway para o robô em aproximadamente `0,35 s` se os comandos cessarem.
+Para mover, o operador precisa habilitar o controle, o robô precisa estar em pé e o anticolisão nativo precisa estar confirmado. Um heartbeat é enviado enquanto a tecla permanece pressionada; ao soltar a tecla o painel envia parada imediatamente e o watchdog do gateway aplica uma segunda parada em até `0,25 s` se os comandos cessarem.
 
 O cabeçalho apresenta as marcas XD4 Robotics e Oracle com o mesmo espaço visual. Os botões **Claro** e **Escuro** mudam o tema explicitamente e preservam a escolha no navegador.
 

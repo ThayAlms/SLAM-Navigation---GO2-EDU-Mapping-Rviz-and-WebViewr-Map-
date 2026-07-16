@@ -1131,6 +1131,22 @@ p {
   text-transform: uppercase;
 }
 
+.map-point-count {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 5px 8px;
+  border: 1px solid rgba(42, 169, 224, 0.25);
+  border-radius: 999px;
+  color: rgba(219, 244, 255, 0.82);
+  background: rgba(5, 12, 18, 0.72);
+  backdrop-filter: blur(8px);
+  font-family: var(--font-secondary);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .map-location {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1601,6 +1617,20 @@ button:focus-visible {
 
 .native-safety-status--protected small {
   color: #58d39b;
+}
+
+.native-safety-status--blocked {
+  border-color: rgba(255, 174, 66, 0.48);
+  background: rgba(255, 174, 66, 0.1);
+}
+
+.native-safety-status--blocked > span {
+  background: #ffae42;
+  box-shadow: 0 0 0 3px rgba(255, 174, 66, 0.13);
+}
+
+.native-safety-status--blocked small {
+  color: #ffbd66;
 }
 
 .control-panel--wide {

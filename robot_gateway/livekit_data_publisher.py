@@ -25,11 +25,34 @@ def sample_points(points, maximum):
     point_count = len(points) // 3
     if point_count <= maximum:
         return points[: point_count * 3]
+
+    triples = [points[index : index + 3] for index in range(0, point_count * 3, 3)]
+    minimum = [min(point[axis] for point in triples) for axis in range(3)]
+    maximum_value = [max(point[axis] for point in triples) for axis in range(3)]
+    bins_per_axis = max(2, round(maximum ** (1.0 / 3.0)))
+    buckets = {}
+    for index, point in enumerate(triples):
+        key = []
+        for axis in range(3):
+            extent = maximum_value[axis] - minimum[axis]
+            normalized = (point[axis] - minimum[axis]) / extent if extent > 0 else 0
+            key.append(min(bins_per_axis - 1, int(normalized * bins_per_axis)))
+        buckets.setdefault(tuple(key), index)
+
+    selected = list(buckets.values())
+    if len(selected) > maximum:
+        step = len(selected) / maximum
+        selected = [selected[int(output_index * step)] for output_index in range(maximum)]
+    elif len(selected) < maximum:
+        selected_set = set(selected)
+        remaining = maximum - len(selected)
+        candidates = [index for index in range(point_count) if index not in selected_set]
+        step = len(candidates) / remaining
+        selected.extend(candidates[int(output_index * step)] for output_index in range(remaining))
+
     sampled = []
-    step = point_count / maximum
-    for output_index in range(maximum):
-        source_index = int(output_index * step) * 3
-        sampled.extend(points[source_index : source_index + 3])
+    for index in selected:
+        sampled.extend(triples[index])
     return sampled
 
 
@@ -48,9 +71,15 @@ def normalized_status(status):
         "speed_max_percent",
         "speed_step_percent",
         "obstacle_avoidance_enabled",
+        "native_avoidance_confirmed",
+        "native_avoidance_confirmation_age_seconds",
         "safety_mode",
         "safety_ready",
         "safety_blocked",
+        "safety_block_reason",
+        "remote_source_confirmed",
+        "last_avoidance_response",
+        "last_remote_source_response",
     )
     telemetry = {field: status.get(field) for field in fields}
     return {
@@ -162,7 +191,7 @@ def main():
         default=os.environ.get("ROBOT_GATEWAY_API_KEY", ""),
     )
     parser.add_argument("--interval", type=float, default=1.0)
-    parser.add_argument("--max-points", type=int, default=800)
+    parser.add_argument("--max-points", type=int, default=1200)
     parser.add_argument("--timeout", type=float, default=10.0)
     args = parser.parse_args()
 

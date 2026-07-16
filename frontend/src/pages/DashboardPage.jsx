@@ -32,9 +32,12 @@ const OFFLINE_STATUS = {
   speed_max_percent: 100,
   speed_step_percent: 5,
   obstacle_avoidance_enabled: false,
+  native_avoidance_confirmed: false,
   safety_mode: "unitree_native_obstacles_avoid",
   safety_ready: false,
   safety_blocked: false,
+  safety_block_reason: null,
+  remote_source_confirmed: false,
 };
 
 const STATUS_REFRESH_INTERVAL_MS = 1_000;
@@ -211,6 +214,22 @@ function DashboardPage() {
   );
 
   useEffect(() => {
+    function handleGlobalPointerEnd(event) {
+      if (motionPointerRef.current === event.pointerId) {
+        motionPointerRef.current = null;
+        stopMotion();
+      }
+    }
+
+    window.addEventListener("pointerup", handleGlobalPointerEnd);
+    window.addEventListener("pointercancel", handleGlobalPointerEnd);
+    return () => {
+      window.removeEventListener("pointerup", handleGlobalPointerEnd);
+      window.removeEventListener("pointercancel", handleGlobalPointerEnd);
+    };
+  }, [stopMotion]);
+
+  useEffect(() => {
     function normalizedKey(event) {
       return event.key.length === 1 ? event.key.toLowerCase() : event.key;
     }
@@ -294,8 +313,16 @@ function DashboardPage() {
   const speedStep = robotStatus.speed_step_percent;
   const postureControlsDisabled =
     !robotStatus.sdk_connected || !robotStatus.control_armed || Boolean(pendingAction);
-  const safetyState = robotStatus.safety_ready ? "protected" : "unavailable";
-  const safetyLabel = robotStatus.safety_ready ? "Ativo" : "Aguardando";
+  const safetyState = robotStatus.safety_blocked
+    ? "blocked"
+    : robotStatus.safety_ready
+      ? "protected"
+      : "unavailable";
+  const safetyLabel = robotStatus.safety_blocked
+    ? "Limite detectado · robô parado"
+    : robotStatus.safety_ready
+      ? "API confirmada"
+      : "Aguardando confirmação";
 
   return (
     <div className="app-layout">
@@ -483,6 +510,7 @@ function DashboardPage() {
                   onPointerDown={(event) => handleMotionPointerDown(event, "forward")}
                   onPointerUp={handleMotionPointerEnd}
                   onPointerCancel={handleMotionPointerEnd}
+                  onPointerLeave={handleMotionPointerEnd}
                   onLostPointerCapture={handleMotionPointerEnd}
                 >W<span>↑</span></button>
                 <div className="teleoperation-pad__row">
@@ -493,6 +521,7 @@ function DashboardPage() {
                     onPointerDown={(event) => handleMotionPointerDown(event, "rotate_left")}
                     onPointerUp={handleMotionPointerEnd}
                     onPointerCancel={handleMotionPointerEnd}
+                    onPointerLeave={handleMotionPointerEnd}
                     onLostPointerCapture={handleMotionPointerEnd}
                   >A<span>↶</span></button>
                   <button
@@ -502,6 +531,7 @@ function DashboardPage() {
                     onPointerDown={(event) => handleMotionPointerDown(event, "backward")}
                     onPointerUp={handleMotionPointerEnd}
                     onPointerCancel={handleMotionPointerEnd}
+                    onPointerLeave={handleMotionPointerEnd}
                     onLostPointerCapture={handleMotionPointerEnd}
                   >S<span>↓</span></button>
                   <button
@@ -511,6 +541,7 @@ function DashboardPage() {
                     onPointerDown={(event) => handleMotionPointerDown(event, "rotate_right")}
                     onPointerUp={handleMotionPointerEnd}
                     onPointerCancel={handleMotionPointerEnd}
+                    onPointerLeave={handleMotionPointerEnd}
                     onLostPointerCapture={handleMotionPointerEnd}
                   >D<span>↷</span></button>
                 </div>

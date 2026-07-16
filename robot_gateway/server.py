@@ -120,7 +120,7 @@ class RobotGatewayRuntime:
         return status
 
     def map_points(self):
-        points = self.node._snapshot(15000)
+        points = self.node._snapshot(24000)
         if points.size == 0:
             return []
         xyz = np.round(points[:, :3], 3)
