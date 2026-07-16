@@ -55,6 +55,12 @@ function AdminUsersPage() {
     }
   }
 
+  function focusNewUserForm() {
+    const emailInput = document.getElementById("managed_email");
+    emailInput?.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.setTimeout(() => emailInput?.focus({ preventScroll: true }), 350);
+  }
+
   return (
     <div className="app-layout">
       <AppHeader showLogout />
@@ -66,10 +72,17 @@ function AdminUsersPage() {
           <p>
             Crie acessos para operadores do equipamento ou para outros administradores.
           </p>
+          <button
+            className="ui-button ui-button--primary mobile-add-user-button"
+            type="button"
+            onClick={focusNewUserForm}
+          >
+            Incluir usuário
+          </button>
         </section>
 
         <section className="user-management-grid">
-          <form className="user-form panel" onSubmit={handleSubmit}>
+          <form id="new-user-form" className="user-form panel" onSubmit={handleSubmit}>
             <div className="user-form-heading">
               <h2>Novo acesso</h2>
               <p>O e-mail será confirmado e o acesso ficará disponível imediatamente.</p>

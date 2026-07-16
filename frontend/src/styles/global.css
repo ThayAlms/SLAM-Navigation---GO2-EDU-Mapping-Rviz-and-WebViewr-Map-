@@ -2869,3 +2869,78 @@ button:focus-visible {
     display: none;
   }
 }
+
+/* Header mobile: mantém o co-branding e o tema completos no login. */
+@media (max-width: 700px) {
+  :root {
+    --header-height: 72px;
+  }
+
+  .partner-logo-slot {
+    flex-basis: 108px;
+    width: 108px;
+    height: 30px;
+  }
+
+  .partner-logo-slot--oracle {
+    flex-basis: 78px;
+    width: 78px;
+  }
+
+  .brand-divider {
+    height: 25px;
+  }
+
+  .app-header--login .app-header-inner {
+    gap: 8px;
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  .mobile-add-user-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: min(100%, 220px);
+    margin-top: 2px;
+  }
+}
+
+@media (max-width: 420px) {
+  .app-header--login .app-header-actions .theme-selector {
+    display: flex;
+  }
+
+  .app-header--login .app-header-partners .brand-divider {
+    display: block;
+  }
+
+  .app-header--login .app-header-partners .partner-logo-slot--oracle {
+    display: flex;
+  }
+}
+
+@media (max-width: 360px) {
+  .app-header--login .partner-logo-slot {
+    flex-basis: 94px;
+    width: 94px;
+    height: 28px;
+  }
+
+  .app-header--login .partner-logo-slot--oracle {
+    flex-basis: 66px;
+    width: 66px;
+  }
+
+  .app-header--login .app-header-inner {
+    gap: 5px;
+    padding-right: 9px;
+    padding-left: 9px;
+  }
+}
+
+@media (min-width: 701px) {
+  .mobile-add-user-button {
+    display: none;
+  }
+}

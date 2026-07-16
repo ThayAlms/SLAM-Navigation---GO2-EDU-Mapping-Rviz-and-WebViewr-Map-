@@ -41,11 +41,15 @@ function AppHeader({ showLogout = false }) {
   }
 
   const isUserManagement = location.pathname.startsWith("/admin/usuarios");
+  const isLogin = location.pathname === "/login";
+  const headerClassName = [
+    "app-header",
+    isScrolled ? "app-header--scrolled" : "",
+    isLogin ? "app-header--login" : "app-header--authenticated",
+  ].filter(Boolean).join(" ");
 
   return (
-    <header
-      className={isScrolled ? "app-header app-header--scrolled" : "app-header"}
-    >
+    <header className={headerClassName}>
       <div className="app-header-inner">
         <div className="app-header-partners" aria-label="XD4 Robotics e Oracle">
           <button
@@ -98,7 +102,7 @@ function AppHeader({ showLogout = false }) {
               type="button"
               onClick={() => navigate(isUserManagement ? "/dashboard" : "/admin/usuarios")}
             >
-              {isUserManagement ? "Operação" : "Usuários"}
+              {isUserManagement ? "Operação" : "Incluir usuário"}
             </button>
           )}
 
