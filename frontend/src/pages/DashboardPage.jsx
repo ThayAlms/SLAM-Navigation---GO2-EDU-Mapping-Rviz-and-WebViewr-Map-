@@ -11,6 +11,8 @@ import {
   requestOracleAnalysis,
   sendRobotCommand,
 } from "../services/api";
+import { isLiveKitEnabled } from "../services/livekit";
+import { useLiveKitRobot } from "../services/useLiveKitRobot";
 
 const OFFLINE_STATUS = {
   robot_online: false,
@@ -63,12 +65,17 @@ function coordinate(value) {
 function DashboardPage() {
   const { session } = useAuth();
   const accessToken = session?.access_token;
-  const [robotStatus, setRobotStatus] = useState(OFFLINE_STATUS);
+  const [polledRobotStatus, setRobotStatus] = useState(OFFLINE_STATUS);
   const [points, setPoints] = useState([]);
   const [statusMessage, setStatusMessage] = useState("");
   const [activeCommand, setActiveCommand] = useState(null);
   const [pendingAction, setPendingAction] = useState("");
   const [isRequestingAnalysis, setIsRequestingAnalysis] = useState(false);
+  const liveKit = useLiveKitRobot(accessToken);
+  const robotStatus =
+    isLiveKitEnabled && liveKit.telemetry
+      ? { ...OFFLINE_STATUS, ...liveKit.telemetry }
+      : polledRobotStatus;
   const motionTimerRef = useRef(null);
   const motionSessionRef = useRef(0);
   const motionPointerRef = useRef(null);
@@ -80,7 +87,7 @@ function DashboardPage() {
       robotStatus.safety_ready,
   );
   useEffect(() => {
-    if (!accessToken) return undefined;
+    if (!accessToken || isLiveKitEnabled) return undefined;
     let active = true;
 
     async function loadStatus() {
@@ -104,7 +111,7 @@ function DashboardPage() {
   }, [accessToken]);
 
   useEffect(() => {
-    if (!accessToken) return undefined;
+    if (!accessToken || isLiveKitEnabled) return undefined;
     let active = true;
 
     async function loadMap() {
@@ -324,7 +331,13 @@ function DashboardPage() {
               </span>
             </div>
             <div className="video-placeholder video-placeholder--live">
-              <RobotCamera accessToken={accessToken} connected={robotStatus.camera_connected} />
+              <RobotCamera
+                accessToken={accessToken}
+                connected={robotStatus.camera_connected}
+                liveKitRoom={liveKit.room}
+                liveKitConnectionState={liveKit.connectionState}
+                liveKitErrorMessage={liveKit.errorMessage}
+              />
               <span className="camera-resolution">GO2 FRONT CAM · 1280 × 720</span>
             </div>
             <OracleButton
@@ -345,7 +358,10 @@ function DashboardPage() {
               </span>
             </div>
             <div className="map-placeholder map-placeholder--live">
-              <PointCloudMap points={points} pose={robotStatus.current_pose} />
+              <PointCloudMap
+                points={isLiveKitEnabled ? liveKit.points : points}
+                pose={robotStatus.current_pose}
+              />
             </div>
             <div className="map-location">
               <div><span>X</span><strong>{coordinate(location?.x)}</strong></div>

@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Room, RoomEvent, Track } from "livekit-client";
-
-import { getLiveKitConnection } from "../services/livekit";
+import { RoomEvent, Track } from "livekit-client";
 
 const CONNECTION_LABELS = {
   connected: "Conectado ao LiveKit",
@@ -9,17 +7,14 @@ const CONNECTION_LABELS = {
   error: "LiveKit indisponível",
 };
 
-function LiveKitRobotCamera({ accessToken }) {
+function LiveKitRobotCamera({ room, connectionState, errorMessage }) {
   const videoRef = useRef(null);
-  const [connectionState, setConnectionState] = useState("connecting");
-  const [errorMessage, setErrorMessage] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
 
   useEffect(() => {
-    if (!accessToken) return undefined;
+    if (!room) return undefined;
 
-    let active = true;
     let attachedTrack = null;
-    const room = new Room({ adaptiveStream: true });
 
     function detachCurrentTrack() {
       if (attachedTrack && videoRef.current) {
@@ -33,50 +28,42 @@ function LiveKitRobotCamera({ accessToken }) {
       detachCurrentTrack();
       attachedTrack = track;
       track.attach(videoRef.current);
-      setConnectionState("streaming");
+      setIsStreaming(true);
     }
 
     function handleTrackUnsubscribed(track) {
       if (track !== attachedTrack) return;
       detachCurrentTrack();
-      setConnectionState("connected");
+      setIsStreaming(false);
     }
 
     room.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);
     room.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
-    room.on(RoomEvent.Disconnected, () => {
-      if (active) setConnectionState("disconnected");
-    });
 
-    async function connect() {
-      try {
-        const credentials = await getLiveKitConnection(accessToken);
-        if (!active) return;
-        await room.connect(credentials.serverUrl, credentials.participantToken);
-        if (active && !attachedTrack) setConnectionState("connected");
-      } catch (error) {
-        if (active) {
-          setErrorMessage(error.message);
-          setConnectionState("error");
+    for (const participant of room.remoteParticipants.values()) {
+      for (const publication of participant.trackPublications.values()) {
+        if (publication.track) {
+          handleTrackSubscribed(publication.track);
+          if (attachedTrack) break;
         }
       }
+      if (attachedTrack) break;
     }
 
-    connect();
     return () => {
-      active = false;
       detachCurrentTrack();
-      room.removeAllListeners();
-      room.disconnect();
+      setIsStreaming(false);
+      room.off(RoomEvent.TrackSubscribed, handleTrackSubscribed);
+      room.off(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
     };
-  }, [accessToken]);
+  }, [room]);
 
   return (
     <div className="livekit-camera">
       <video
         ref={videoRef}
         className={
-          connectionState === "streaming"
+          isStreaming
             ? "robot-camera-frame"
             : "robot-camera-frame is-waiting"
         }
@@ -85,7 +72,7 @@ function LiveKitRobotCamera({ accessToken }) {
         playsInline
       />
 
-      {connectionState !== "streaming" && (
+      {!isStreaming && (
         <div className="stream-empty">
           <span className="stream-empty-icon">◉</span>
           <strong>

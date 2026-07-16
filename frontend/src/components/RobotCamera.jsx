@@ -6,9 +6,21 @@ import LiveKitRobotCamera from "./LiveKitRobotCamera";
 
 const FRAME_INTERVAL_MS = 220;
 
-function RobotCamera({ accessToken, connected }) {
+function RobotCamera({
+  accessToken,
+  connected,
+  liveKitRoom,
+  liveKitConnectionState,
+  liveKitErrorMessage,
+}) {
   if (isLiveKitEnabled) {
-    return <LiveKitRobotCamera accessToken={accessToken} />;
+    return (
+      <LiveKitRobotCamera
+        room={liveKitRoom}
+        connectionState={liveKitConnectionState}
+        errorMessage={liveKitErrorMessage}
+      />
+    );
   }
 
   return <PollingRobotCamera accessToken={accessToken} connected={connected} />;
