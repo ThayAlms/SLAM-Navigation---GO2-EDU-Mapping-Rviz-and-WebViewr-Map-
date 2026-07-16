@@ -17,7 +17,7 @@ from urllib.parse import urlparse
 import cv2
 import numpy as np
 import rclpy
-from rclpy.executors import SingleThreadedExecutor
+from rclpy.executors import MultiThreadedExecutor
 
 ROOT = Path(__file__).resolve().parent
 SLAM_DIR = ROOT.parent / "go2_native_ws" / "go2_slam"
@@ -97,7 +97,7 @@ class RobotGatewayRuntime:
         self.gateway_key = gateway_key
         self.node = Go2MappingNode()
         self.camera = CameraStream()
-        self.executor = SingleThreadedExecutor()
+        self.executor = MultiThreadedExecutor(num_threads=4)
         self.executor.add_node(self.node)
         self.ros_thread = threading.Thread(target=self.executor.spin, name="go2-ros", daemon=True)
 

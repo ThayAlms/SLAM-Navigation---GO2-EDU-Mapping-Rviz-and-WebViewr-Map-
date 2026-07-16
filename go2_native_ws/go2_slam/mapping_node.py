@@ -19,6 +19,7 @@ from pathlib import Path
 import numpy as np
 import rclpy
 from nav_msgs.msg import Odometry
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
 from rclpy.node import Node
 from rclpy.qos import (
     DurabilityPolicy,
@@ -50,6 +51,11 @@ AVOIDANCE_CONFIRMATION_TIMEOUT_SECONDS = 8.0
 REMOTE_SOURCE_REFRESH_SECONDS = 10.0
 OBSTACLE_STOP_GRACE_SECONDS = 0.65
 OBSTACLE_STOP_CONFIRM_SECONDS = 0.30
+CLOUD_STATUS_TIMEOUT_SECONDS = 3.0
+SENSOR_STATUS_TIMEOUT_SECONDS = 2.0
+ROBOT_STATUS_TIMEOUT_SECONDS = 2.0
+SPORT_STATE_STATUS_TIMEOUT_SECONDS = 2.0
+SPORT_STATE_SAFETY_TIMEOUT_SECONDS = 1.0
 DEFAULT_SPEED_PERCENT = 55
 MIN_SPEED_PERCENT = 5
 MAX_SPEED_PERCENT = 100
@@ -194,6 +200,12 @@ class Go2MappingNode(Node):
         self._safety_blocked_at = 0.0
         self._shutdown_started = False
 
+        # A nuvem é custosa. Mantê-la em um grupo separado evita que sua
+        # deduplicação atrase IMU, odometria, estado do robô e controle.
+        self._cloud_callback_group = MutuallyExclusiveCallbackGroup()
+        self._state_callback_group = ReentrantCallbackGroup()
+        self._control_callback_group = MutuallyExclusiveCallbackGroup()
+
         map_qos = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             depth=1,
@@ -219,36 +231,42 @@ class Go2MappingNode(Node):
             self.cloud_topic,
             self._cloud_callback,
             qos_profile_sensor_data,
+            callback_group=self._cloud_callback_group,
         )
         self.odom_sub = self.create_subscription(
             Odometry,
             self.odom_topic,
             self._odom_callback,
             qos_profile_sensor_data,
+            callback_group=self._state_callback_group,
         )
         self.imu_sub = self.create_subscription(
             Imu,
             self.imu_topic,
             self._imu_callback,
             qos_profile_sensor_data,
+            callback_group=self._state_callback_group,
         )
         self.sport_state_sub = self.create_subscription(
             SportModeState,
             "/sportmodestate",
             self._sport_state_callback,
             qos_profile_sensor_data,
+            callback_group=self._state_callback_group,
         )
         self.sport_response_sub = self.create_subscription(
             Response,
             "/api/sport/response",
             self._sport_response_callback,
             10,
+            callback_group=self._control_callback_group,
         )
         self.remote_control_response_sub = self.create_subscription(
             Response,
             "/api/obstacles_avoid/response",
             self._remote_control_response_callback,
             10,
+            callback_group=self._control_callback_group,
         )
 
         self.save_service = self.create_service(
@@ -258,13 +276,25 @@ class Go2MappingNode(Node):
             Trigger, "/go2_slam/reset_map", self._reset_service
         )
 
-        self.publish_timer = self.create_timer(0.8, self.publish_map)
-        self.status_timer = self.create_timer(1.0, self.publish_status)
+        self.publish_timer = self.create_timer(
+            0.8,
+            self.publish_map,
+            callback_group=self._cloud_callback_group,
+        )
+        self.status_timer = self.create_timer(
+            1.0,
+            self.publish_status,
+            callback_group=self._state_callback_group,
+        )
         self.watchdog_timer = self.create_timer(
-            MOTION_PUBLISH_PERIOD_SECONDS, self._motion_watchdog
+            MOTION_PUBLISH_PERIOD_SECONDS,
+            self._motion_watchdog,
+            callback_group=self._control_callback_group,
         )
         self.avoidance_timer = self.create_timer(
-            2.0, self._ensure_native_obstacle_avoidance
+            2.0,
+            self._ensure_native_obstacle_avoidance,
+            callback_group=self._control_callback_group,
         )
 
         self.get_logger().info(
@@ -520,7 +550,7 @@ class Go2MappingNode(Node):
             return "native_avoidance_unconfirmed"
         if self._control_armed and not self._remote_source_ready(now):
             return "remote_source_unconfirmed"
-        if now - self._last_sport_state_at > 0.5:
+        if now - self._last_sport_state_at > SPORT_STATE_SAFETY_TIMEOUT_SECONDS:
             return "sport_state_unavailable"
         return None
 
@@ -763,6 +793,22 @@ class Go2MappingNode(Node):
 
     def status_dict(self):
         now = time.monotonic()
+        cloud_age = max(0.0, now - self._last_cloud_at)
+        imu_age = max(0.0, now - self._last_imu_at)
+        odom_age = max(0.0, now - self._last_odom_at)
+        sport_state_age = max(0.0, now - self._last_sport_state_at)
+        lidar_connected = cloud_age < CLOUD_STATUS_TIMEOUT_SECONDS
+        imu_connected = imu_age < SENSOR_STATUS_TIMEOUT_SECONDS
+        odom_connected = odom_age < ROBOT_STATUS_TIMEOUT_SECONDS
+        sport_state_connected = (
+            sport_state_age < SPORT_STATE_STATUS_TIMEOUT_SECONDS
+        )
+        lio_connected = (
+            lidar_connected
+            and imu_connected
+            and odom_connected
+            and now - self._last_odom_jump_at >= 1.0
+        )
         native_avoidance_ready = self._native_avoidance_ready(now)
         remote_source_ready = self._remote_source_ready(now)
         safety_ready = native_avoidance_ready and (
@@ -776,23 +822,22 @@ class Go2MappingNode(Node):
             scan_count = self._scan_count
         return {
             "mapping": True,
-            "lidar_connected": time.monotonic() - self._last_cloud_at < 1.5,
-            "imu_connected": time.monotonic() - self._last_imu_at < 0.3,
-            "lio_connected": (
-                time.monotonic() - self._last_cloud_at < 1.5
-                and time.monotonic() - self._last_imu_at < 0.3
-                and time.monotonic() - self._last_odom_at < 0.25
-                and time.monotonic() - self._last_odom_jump_at >= 1.0
-            ),
-            "robot_connected": time.monotonic() - self._last_odom_at < 0.25,
-            "sport_state_connected": (
-                time.monotonic() - self._last_sport_state_at < 0.5
-            ),
+            "lidar_connected": lidar_connected,
+            "imu_connected": imu_connected,
+            "lio_connected": lio_connected,
+            "robot_connected": odom_connected or sport_state_connected,
+            "sport_state_connected": sport_state_connected,
+            "sensor_age_seconds": {
+                "cloud": round(cloud_age, 3),
+                "imu": round(imu_age, 3),
+                "odometry": round(odom_age, 3),
+                "sport_state": round(sport_state_age, 3),
+            },
             "control_armed": self._control_armed,
             "moving": self._moving,
             "last_command": self._last_command,
             "last_command_age_seconds": (
-                round(time.monotonic() - self._last_command_at, 2)
+                round(max(0.0, now - self._last_command_at), 2)
                 if self._last_command_at
                 else None
             ),
@@ -813,7 +858,7 @@ class Go2MappingNode(Node):
             "native_avoidance_switch": self._native_avoidance_enabled,
             "native_avoidance_confirmed": native_avoidance_ready,
             "native_avoidance_confirmation_age_seconds": (
-                round(now - self._native_avoidance_confirmed_at, 2)
+                round(max(0.0, now - self._native_avoidance_confirmed_at), 2)
                 if self._native_avoidance_confirmed_at
                 else None
             ),
@@ -821,7 +866,7 @@ class Go2MappingNode(Node):
             "safety_blocked": self._safety_blocked,
             "safety_block_reason": self._safety_block_reason,
             "safety_block_age_seconds": (
-                round(now - self._safety_blocked_at, 2)
+                round(max(0.0, now - self._safety_blocked_at), 2)
                 if self._safety_blocked_at
                 else None
             ),
@@ -831,13 +876,13 @@ class Go2MappingNode(Node):
             "last_remote_source_response": self._last_remote_source_response,
             "last_remote_response": self._last_remote_response,
             "last_remote_response_age_seconds": (
-                round(time.monotonic() - self._last_remote_response_at, 2)
+                round(max(0.0, now - self._last_remote_response_at), 2)
                 if self._last_remote_response_at
                 else None
             ),
             "last_sport_response": self._last_sport_response,
             "last_sport_response_age_seconds": (
-                round(time.monotonic() - self._last_sport_response_at, 2)
+                round(max(0.0, now - self._last_sport_response_at), 2)
                 if self._last_sport_response_at
                 else None
             ),
@@ -846,7 +891,7 @@ class Go2MappingNode(Node):
             "received_scan_count": self._received_scan_count,
             "rejected_scan_count": self._rejected_scan_count,
             "merged_point_count": self._merged_point_count,
-            "elapsed_seconds": round(time.monotonic() - self._started_at, 1),
+            "elapsed_seconds": round(now - self._started_at, 1),
             "voxel_size": self.voxel_size,
             "min_voxel_hits": self.min_voxel_hits,
             "speed_limit_percent": self._speed_percent,
@@ -873,14 +918,7 @@ class Go2MappingNode(Node):
             ),
             "frame": self._map_frame,
             "slam_backend": "Go2 native LIO",
-            "mapping_quality": (
-                "ok"
-                if time.monotonic() - self._last_cloud_at < 1.5
-                and time.monotonic() - self._last_imu_at < 0.3
-                and time.monotonic() - self._last_odom_at < 0.25
-                and time.monotonic() - self._last_odom_jump_at >= 1.0
-                else "degraded"
-            ),
+            "mapping_quality": "ok" if lio_connected else "degraded",
             "imu": self._latest_imu,
             "origin": self._origin_odom,
             "current_pose": self._latest_odom,
