@@ -18,12 +18,17 @@ function PointCloudMap({ points, pose }) {
     const canvas = canvasRef.current;
     if (!canvas) return undefined;
     const context = canvas.getContext("2d", { alpha: true });
+    let animationFrame = 0;
 
     function draw() {
       const rect = canvas.getBoundingClientRect();
       const ratio = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.max(1, Math.round(rect.width * ratio));
-      canvas.height = Math.max(1, Math.round(rect.height * ratio));
+      const pixelWidth = Math.max(1, Math.round(rect.width * ratio));
+      const pixelHeight = Math.max(1, Math.round(rect.height * ratio));
+      if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+        canvas.width = pixelWidth;
+        canvas.height = pixelHeight;
+      }
       context.setTransform(ratio, 0, 0, ratio, 0, 0);
       context.clearRect(0, 0, rect.width, rect.height);
       if (!points || points.length < 3) return;
@@ -139,10 +144,18 @@ function PointCloudMap({ points, pose }) {
       }
     }
 
-    draw();
-    const observer = new ResizeObserver(draw);
+    function scheduleDraw() {
+      window.cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(draw);
+    }
+
+    scheduleDraw();
+    const observer = new ResizeObserver(scheduleDraw);
     observer.observe(canvas);
-    return () => observer.disconnect();
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      observer.disconnect();
+    };
   }, [pitch, points, pose, yaw, zoom]);
 
   function handlePointerDown(event) {

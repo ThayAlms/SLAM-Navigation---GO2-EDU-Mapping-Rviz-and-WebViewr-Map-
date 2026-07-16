@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Room, RoomEvent } from "livekit-client";
 
 import { getLiveKitConnection, isLiveKitEnabled } from "./livekit";
@@ -17,6 +17,7 @@ export function useLiveKitRobot(accessToken) {
   const [errorMessage, setErrorMessage] = useState("");
   const [points, setPoints] = useState([]);
   const [telemetry, setTelemetry] = useState(null);
+  const latestTelemetryAtRef = useRef(0);
 
   useEffect(() => {
     if (!isLiveKitEnabled || !accessToken) return undefined;
@@ -35,7 +36,13 @@ export function useLiveKitRobot(accessToken) {
 
       const decodedTelemetry = decodeLiveKitTelemetry(payload);
       if (topic === TELEMETRY_TOPIC || decodedTelemetry?.robot_id === "primary") {
-        if (decodedTelemetry) setTelemetry(decodedTelemetry);
+        if (!decodedTelemetry) return;
+        const capturedAt = Number(decodedTelemetry.captured_at_ms || 0);
+        if (latestTelemetryAtRef.current && capturedAt < latestTelemetryAtRef.current) {
+          return;
+        }
+        if (capturedAt) latestTelemetryAtRef.current = capturedAt;
+        setTelemetry(decodedTelemetry);
       }
     }
 
@@ -72,6 +79,7 @@ export function useLiveKitRobot(accessToken) {
     connect();
     return () => {
       active = false;
+      latestTelemetryAtRef.current = 0;
       nextRoom.removeAllListeners();
       nextRoom.disconnect();
       setRoom(null);

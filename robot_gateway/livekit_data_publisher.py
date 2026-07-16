@@ -84,6 +84,7 @@ def normalized_status(status):
     telemetry = {field: status.get(field) for field in fields}
     return {
         **telemetry,
+        "captured_at_ms": int(time.time() * 1000),
         "robot_id": "primary",
         "robot_online": robot_connected,
         "network_online": True,
@@ -228,8 +229,10 @@ def main():
     while not stopping:
         started_at = time.monotonic()
         try:
-            status = get_json(
-                gateway_url + "/api/status", args.gateway_key, args.timeout
+            status = normalized_status(
+                get_json(
+                    gateway_url + "/api/status", args.gateway_key, args.timeout
+                )
             )
             point_payload = get_json(
                 gateway_url + "/api/map/points", args.gateway_key, args.timeout
@@ -237,7 +240,6 @@ def main():
             points = sample_points(point_payload.get("points", []), args.max_points)
             if not points:
                 raise RuntimeError("gateway ainda não possui pontos do LiDAR")
-            status = normalized_status(status)
             if args.transport == "cli":
                 result = publish_with_cli(
                     args.room, points, status, args.timeout
