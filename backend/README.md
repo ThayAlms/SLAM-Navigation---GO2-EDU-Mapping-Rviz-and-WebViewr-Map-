@@ -35,12 +35,17 @@ Essas rotas exigem `Authorization: Bearer <jwt-do-supabase>`:
 | Método | Rota | Uso |
 | --- | --- | --- |
 | `GET` | `/api/auth/me` | Retorna o usuário autenticado |
+| `POST` | `/api/auth/users` | Cria usuário comum/admin; exige perfil administrador |
 | `POST` | `/api/auth/login-events` | Registra o acesso no histórico |
 | `GET` | `/api/robot/status` | Retorna telemetria e URLs atuais |
 | `GET` | `/api/robot/camera/frame` | Retorna o último JPEG da câmera |
 | `GET` | `/api/robot/map/points` | Retorna a nuvem consolidada |
 | `POST` | `/api/robot/commands` | Executa no gateway ou adiciona à fila |
 | `POST` | `/api/oracle/analyses` | Adiciona uma captura à fila Oracle |
+
+A criação de usuários usa `SUPABASE_SERVICE_ROLE_KEY` somente no servidor. A
+rota confirma o e-mail no Auth, sincroniza `public.profiles` com o papel
+selecionado e remove a conta recém-criada se a gravação do perfil falhar.
 
 ## Execução direta na Jetson
 

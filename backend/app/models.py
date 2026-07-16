@@ -21,9 +21,16 @@ class RobotCommandName(str, Enum):
     EMERGENCY_STOP = "emergency_stop"
 
 
+class UserRole(str, Enum):
+    OPERATOR = "operator"
+    ADMIN = "admin"
+
+
 class CurrentUser(BaseModel):
     id: UUID
     email: str | None = None
+    display_name: str | None = None
+    role: UserRole = UserRole.OPERATOR
 
 
 class AuthContext(BaseModel):
@@ -33,6 +40,24 @@ class AuthContext(BaseModel):
 
 class LoginEventIn(BaseModel):
     source: str = Field(default="web", max_length=30)
+
+
+class AdminUserCreateIn(BaseModel):
+    email: str = Field(
+        min_length=3,
+        max_length=320,
+        pattern=r"^[^\s@]+@[^\s@]+\.[^\s@]+$",
+    )
+    password: str = Field(min_length=8, max_length=128)
+    display_name: str | None = Field(default=None, max_length=120)
+    role: UserRole = UserRole.OPERATOR
+
+
+class AdminUserCreated(BaseModel):
+    id: UUID
+    email: str
+    display_name: str | None = None
+    role: UserRole
 
 
 class RobotCommandIn(BaseModel):

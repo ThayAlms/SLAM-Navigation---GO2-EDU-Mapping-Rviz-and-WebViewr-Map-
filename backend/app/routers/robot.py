@@ -33,10 +33,15 @@ OFFLINE_STATUS = {
     "posture": "unknown",
     "point_count": 0,
     "current_location": None,
-    "speed_limit_percent": 30,
-    "speed_min_percent": 10,
-    "speed_max_percent": 50,
+    "speed_limit_percent": 55,
+    "speed_min_percent": 5,
+    "speed_max_percent": 100,
     "speed_step_percent": 5,
+    "obstacle_avoidance_enabled": False,
+    "native_avoidance_switch": None,
+    "safety_mode": "unitree_native_obstacles_avoid",
+    "safety_ready": False,
+    "safety_blocked": False,
 }
 
 

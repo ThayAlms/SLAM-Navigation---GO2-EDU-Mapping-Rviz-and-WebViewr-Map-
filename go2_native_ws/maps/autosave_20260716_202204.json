@@ -1,0 +1,46 @@
+{
+  "name": "autosave_20260716_202204",
+  "created_at": "2026-07-16T20:22:04.737408+08:00",
+  "pcd_file": "autosave_20260716_202204.pcd",
+  "point_count": 26287,
+  "frame": "odom",
+  "voxel_size_m": 0.06,
+  "bounds_m": {
+    "min": [
+      -1.7060999870300293,
+      -7.895999908447266,
+      -0.26570001244544983
+    ],
+    "max": [
+      4.295100212097168,
+      1.8309999704360962,
+      1.812000036239624
+    ]
+  },
+  "mapping_duration_seconds": 1110.65,
+  "scan_count": 1157,
+  "origin_odom": {
+    "x": -0.013714272528886795,
+    "y": -0.0068582575768232346,
+    "z": 0.04658666253089905,
+    "qx": -0.006357457023113966,
+    "qy": -0.05062006786465645,
+    "qz": -0.11951766163110733,
+    "qw": 0.9915205836296082
+  },
+  "sensor_topics": [
+    "/utlidar/cloud_deskewed",
+    "/utlidar/robot_odom",
+    "/utlidar/imu"
+  ],
+  "slam_backend": "Go2 native LIO",
+  "raw_sensor_topics": [
+    "/utlidar/cloud",
+    "/utlidar/imu"
+  ],
+  "deduplication": "one_centroid_per_voxel",
+  "min_voxel_hits": 2,
+  "keyframe_distance_m": 0.04,
+  "keyframe_rotation_deg": 2.5,
+  "speed_limit_percent": 30
+}

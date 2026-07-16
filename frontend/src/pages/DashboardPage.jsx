@@ -19,21 +19,24 @@ const OFFLINE_STATUS = {
   gateway_connected: false,
   camera_connected: false,
   lio_connected: false,
-  battery_percent: null,
   control_armed: false,
   posture: "unknown",
   point_count: 0,
   current_location: null,
   current_pose: null,
-  speed_limit_percent: 30,
-  speed_min_percent: 10,
-  speed_max_percent: 50,
+  speed_limit_percent: 55,
+  speed_min_percent: 5,
+  speed_max_percent: 100,
   speed_step_percent: 5,
+  obstacle_avoidance_enabled: false,
+  safety_mode: "unitree_native_obstacles_avoid",
+  safety_ready: false,
+  safety_blocked: false,
 };
 
 const STATUS_REFRESH_INTERVAL_MS = 1_000;
 const MAP_REFRESH_INTERVAL_MS = 850;
-const MOTION_HEARTBEAT_MS = 140;
+const MOTION_HEARTBEAT_MS = 80;
 
 const MOVEMENT_LABELS = {
   forward: "AVANÇANDO",
@@ -67,11 +70,14 @@ function DashboardPage() {
   const [pendingAction, setPendingAction] = useState("");
   const [isRequestingAnalysis, setIsRequestingAnalysis] = useState(false);
   const motionTimerRef = useRef(null);
+  const motionSessionRef = useRef(0);
+  const motionPointerRef = useRef(null);
 
   const canMove = Boolean(
     robotStatus.sdk_connected &&
       robotStatus.control_armed &&
-      robotStatus.posture === "standing",
+      robotStatus.posture === "standing" &&
+      robotStatus.safety_ready,
   );
   useEffect(() => {
     if (!accessToken) return undefined;
@@ -120,7 +126,9 @@ function DashboardPage() {
 
   const stopMotion = useCallback(
     (sendStop = true) => {
-      window.clearInterval(motionTimerRef.current);
+      motionSessionRef.current += 1;
+      motionPointerRef.current = null;
+      window.clearTimeout(motionTimerRef.current);
       motionTimerRef.current = null;
       setActiveCommand(null);
       if (sendStop && accessToken) {
@@ -136,24 +144,50 @@ function DashboardPage() {
     (command) => {
       if (!accessToken || !canMove) return;
       stopMotion(false);
+      const motionSession = motionSessionRef.current + 1;
+      motionSessionRef.current = motionSession;
       setStatusMessage("");
       setActiveCommand(command);
 
       async function pulse() {
+        if (motionSessionRef.current !== motionSession) return;
         try {
           await sendRobotCommand(accessToken, command, { duration_ms: 250 });
+          if (motionSessionRef.current === motionSession) {
+            motionTimerRef.current = window.setTimeout(pulse, MOTION_HEARTBEAT_MS);
+          }
         } catch (error) {
-          window.clearInterval(motionTimerRef.current);
-          motionTimerRef.current = null;
-          setActiveCommand(null);
-          setStatusMessage(error.message);
+          if (motionSessionRef.current === motionSession) {
+            stopMotion();
+            setStatusMessage(error.message);
+          }
         }
       }
 
       pulse();
-      motionTimerRef.current = window.setInterval(pulse, MOTION_HEARTBEAT_MS);
     },
     [accessToken, canMove, stopMotion],
+  );
+
+  const handleMotionPointerDown = useCallback(
+    (event, command) => {
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      event.preventDefault();
+      motionPointerRef.current = event.pointerId;
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      beginMotion(command);
+    },
+    [beginMotion],
+  );
+
+  const handleMotionPointerEnd = useCallback(
+    (event) => {
+      event.preventDefault();
+      if (motionPointerRef.current !== event.pointerId) return;
+      motionPointerRef.current = null;
+      stopMotion();
+    },
+    [stopMotion],
   );
 
   useEffect(() => {
@@ -240,6 +274,8 @@ function DashboardPage() {
   const speedStep = robotStatus.speed_step_percent;
   const postureControlsDisabled =
     !robotStatus.sdk_connected || !robotStatus.control_armed || Boolean(pendingAction);
+  const safetyState = robotStatus.safety_ready ? "protected" : "unavailable";
+  const safetyLabel = robotStatus.safety_ready ? "Ativo" : "Aguardando";
 
   return (
     <div className="app-layout">
@@ -247,7 +283,6 @@ function DashboardPage() {
 
       <main className="dashboard-page">
         <section className="dashboard-title">
-          <span className="project-badge">SLAM · OPERAÇÃO 4G</span>
           <h1>Painel de operação do Go2</h1>
           <p>Câmera, nuvem de pontos, localização e controle em tempo real.</p>
         </section>
@@ -257,12 +292,6 @@ function DashboardPage() {
             <span>Robô</span>
             <strong className={robotStatus.robot_online ? "status-online" : "status-offline"}>
               {robotStatus.robot_online ? "Online" : "Offline"}
-            </strong>
-          </article>
-          <article className="status-card">
-            <span>Gateway Jetson</span>
-            <strong className={robotStatus.gateway_connected ? "status-online" : "status-offline"}>
-              {robotStatus.gateway_connected ? "Conectado" : "Desconectado"}
             </strong>
           </article>
           <article className="status-card">
@@ -280,10 +309,6 @@ function DashboardPage() {
           <article className="status-card">
             <span>Mapa</span>
             <strong>{Number(robotStatus.point_count || 0).toLocaleString("pt-BR")} pts</strong>
-          </article>
-          <article className="status-card">
-            <span>Bateria</span>
-            <strong>{robotStatus.battery_percent == null ? "--%" : `${robotStatus.battery_percent}%`}</strong>
           </article>
         </section>
 
@@ -330,6 +355,7 @@ function DashboardPage() {
             </div>
             <div className="map-actions">
               <button
+                className="ui-button ui-button--secondary"
                 type="button"
                 onClick={() => handleAction("reset_map", {}, "Novo mapa iniciado.")}
                 disabled={!robotStatus.lio_connected || Boolean(pendingAction)}
@@ -337,7 +363,7 @@ function DashboardPage() {
                 Novo mapa
               </button>
               <button
-                className="map-save-button"
+                className="ui-button ui-button--primary map-save-button"
                 type="button"
                 onClick={() => handleAction("save_map", {}, "Mapa salvo.")}
                 disabled={!robotStatus.lio_connected || Boolean(pendingAction)}
@@ -348,23 +374,39 @@ function DashboardPage() {
           </article>
         </section>
 
-        <section className="panel control-panel control-panel--wide">
-          <div className="panel-header">
+        <section className="panel teleoperation-panel">
+          <div className="panel-header teleoperation-heading">
             <div>
               <h2>Teleoperação</h2>
-              <p>Segure WASD ou as setas. Soltar a tecla envia parada.</p>
+              <p>Movimento contínuo, postura e resposta em tempo real.</p>
             </div>
             <span className={`status-label ${robotStatus.control_armed ? "is-armed" : ""}`}>
               {robotStatus.control_armed ? "CONTROLE HABILITADO" : "CONTROLE BLOQUEADO"}
             </span>
           </div>
 
-          <div className="control-layout">
-            <div className="arm-and-posture">
+          <div className={`native-safety-status native-safety-status--${safetyState}`} role="status">
+            <span aria-hidden="true" />
+            <strong>Proteção Unitree</strong>
+            <small>{safetyLabel}</small>
+          </div>
+
+          <div className="teleoperation-grid">
+            <section className="teleoperation-card teleoperation-card--system">
+              <div className="teleoperation-card__header">
+                <div>
+                  <strong>Sistema</strong>
+                  <small>Canal de controle e postura</small>
+                </div>
+              </div>
               <button
-                className={`arm-toggle ${robotStatus.control_armed ? "is-armed" : ""}`}
+                className={`ui-button teleoperation-arm-button ${robotStatus.control_armed ? "is-armed" : ""}`}
                 type="button"
-                disabled={!robotStatus.sdk_connected || Boolean(pendingAction)}
+                disabled={
+                  !robotStatus.sdk_connected ||
+                  Boolean(pendingAction) ||
+                  (!robotStatus.control_armed && !robotStatus.safety_ready)
+                }
                 onClick={() =>
                   handleAction(
                     robotStatus.control_armed ? "disarm" : "arm",
@@ -374,11 +416,12 @@ function DashboardPage() {
                 }
               >
                 <strong>{robotStatus.control_armed ? "Bloquear controle" : "Habilitar controle"}</strong>
-                <small>{robotStatus.control_armed ? "Interrompe e desarma" : "Exige área livre ao redor"}</small>
+                <small>{robotStatus.control_armed ? "Canal ativo · toque para bloquear" : "Toque para ativar o canal"}</small>
               </button>
 
-              <div className="posture-control">
+              <div className="teleoperation-posture">
                 <button
+                  className="ui-button ui-button--secondary"
                   type="button"
                   disabled={postureControlsDisabled}
                   onClick={() => handleAction("stand_up", {}, "Comando para levantar enviado.")}
@@ -386,6 +429,7 @@ function DashboardPage() {
                   <span>↑</span> Levantar
                 </button>
                 <button
+                  className="ui-button ui-button--secondary"
                   type="button"
                   disabled={postureControlsDisabled}
                   onClick={() => handleAction("stand_down", {}, "Comando para deitar enviado.")}
@@ -393,54 +437,68 @@ function DashboardPage() {
                   <span>↓</span> Deitar
                 </button>
               </div>
-            </div>
+            </section>
 
-            <div className="wasd-control" aria-label="Controle de movimentação">
-              <button
-                className={activeCommand === "forward" ? "is-active" : ""}
-                type="button"
-                disabled={!canMove}
-                onPointerDown={() => beginMotion("forward")}
-                onPointerUp={() => stopMotion()}
-                onPointerCancel={() => stopMotion()}
-                onPointerLeave={() => activeCommand === "forward" && stopMotion()}
-              >W<span>↑</span></button>
-              <div>
-                <button
-                  className={activeCommand === "rotate_left" ? "is-active" : ""}
-                  type="button"
-                  disabled={!canMove}
-                  onPointerDown={() => beginMotion("rotate_left")}
-                  onPointerUp={() => stopMotion()}
-                  onPointerCancel={() => stopMotion()}
-                  onPointerLeave={() => activeCommand === "rotate_left" && stopMotion()}
-                >A<span>↶</span></button>
-                <button
-                  className={activeCommand === "backward" ? "is-active" : ""}
-                  type="button"
-                  disabled={!canMove}
-                  onPointerDown={() => beginMotion("backward")}
-                  onPointerUp={() => stopMotion()}
-                  onPointerCancel={() => stopMotion()}
-                  onPointerLeave={() => activeCommand === "backward" && stopMotion()}
-                >S<span>↓</span></button>
-                <button
-                  className={activeCommand === "rotate_right" ? "is-active" : ""}
-                  type="button"
-                  disabled={!canMove}
-                  onPointerDown={() => beginMotion("rotate_right")}
-                  onPointerUp={() => stopMotion()}
-                  onPointerCancel={() => stopMotion()}
-                  onPointerLeave={() => activeCommand === "rotate_right" && stopMotion()}
-                >D<span>↷</span></button>
+            <section className="teleoperation-card teleoperation-card--direction">
+              <div className="teleoperation-card__header">
+                <div>
+                  <strong>Direção</strong>
+                  <small>WASD · mantenha pressionado</small>
+                </div>
               </div>
-              <small>{activeCommand ? MOVEMENT_LABELS[activeCommand] : canMove ? "PRONTO" : "BLOQUEADO"}</small>
-            </div>
-
-            <div className="speed-control-card">
-              <span>Velocidade</span>
-              <div>
+              <div className="teleoperation-pad" aria-label="Controle de movimentação">
                 <button
+                  className={`teleoperation-key ${activeCommand === "forward" ? "is-active" : ""}`}
+                  type="button"
+                  disabled={!canMove}
+                  onPointerDown={(event) => handleMotionPointerDown(event, "forward")}
+                  onPointerUp={handleMotionPointerEnd}
+                  onPointerCancel={handleMotionPointerEnd}
+                  onLostPointerCapture={handleMotionPointerEnd}
+                >W<span>↑</span></button>
+                <div className="teleoperation-pad__row">
+                  <button
+                    className={`teleoperation-key ${activeCommand === "rotate_left" ? "is-active" : ""}`}
+                    type="button"
+                    disabled={!canMove}
+                    onPointerDown={(event) => handleMotionPointerDown(event, "rotate_left")}
+                    onPointerUp={handleMotionPointerEnd}
+                    onPointerCancel={handleMotionPointerEnd}
+                    onLostPointerCapture={handleMotionPointerEnd}
+                  >A<span>↶</span></button>
+                  <button
+                    className={`teleoperation-key ${activeCommand === "backward" ? "is-active" : ""}`}
+                    type="button"
+                    disabled={!canMove}
+                    onPointerDown={(event) => handleMotionPointerDown(event, "backward")}
+                    onPointerUp={handleMotionPointerEnd}
+                    onPointerCancel={handleMotionPointerEnd}
+                    onLostPointerCapture={handleMotionPointerEnd}
+                  >S<span>↓</span></button>
+                  <button
+                    className={`teleoperation-key ${activeCommand === "rotate_right" ? "is-active" : ""}`}
+                    type="button"
+                    disabled={!canMove}
+                    onPointerDown={(event) => handleMotionPointerDown(event, "rotate_right")}
+                    onPointerUp={handleMotionPointerEnd}
+                    onPointerCancel={handleMotionPointerEnd}
+                    onLostPointerCapture={handleMotionPointerEnd}
+                  >D<span>↷</span></button>
+                </div>
+                <small>{activeCommand ? MOVEMENT_LABELS[activeCommand] : canMove ? "PRONTO" : "BLOQUEADO"}</small>
+              </div>
+            </section>
+
+            <section className="teleoperation-card teleoperation-card--response">
+              <div className="teleoperation-card__header">
+                <div>
+                  <strong>Resposta</strong>
+                  <small>Intensidade do comando nativo</small>
+                </div>
+              </div>
+              <div className="teleoperation-speed">
+                <button
+                  className="teleoperation-speed__button"
                   type="button"
                   aria-label="Diminuir velocidade"
                   disabled={!robotStatus.sdk_connected || speed <= speedMin || Boolean(pendingAction)}
@@ -448,26 +506,27 @@ function DashboardPage() {
                 >−</button>
                 <strong>{speed}%</strong>
                 <button
+                  className="teleoperation-speed__button"
                   type="button"
                   aria-label="Aumentar velocidade"
                   disabled={!robotStatus.sdk_connected || speed >= speedMax || Boolean(pendingAction)}
                   onClick={() => handleAction("set_speed", { percent: speed + speedStep }, `Velocidade ajustada para ${speed + speedStep}%.`)}
                 >+</button>
               </div>
-              <small>Faixa segura: {speedMin}%–{speedMax}%</small>
-            </div>
+              <small>Nível operacional · {speedMin}%–{speedMax}%</small>
+            </section>
           </div>
 
-          <button
-            className="emergency-button"
-            type="button"
-            onClick={handleEmergencyStop}
-            disabled={!accessToken || pendingAction === "emergency_stop"}
-          >
-            Parada de emergência
-          </button>
-
-          <p className="watchdog-note">Watchdog ativo · parada automática em 0,35 s sem comando</p>
+          <div className="teleoperation-footer">
+            <button
+              className="ui-button ui-button--danger teleoperation-emergency"
+              type="button"
+              onClick={handleEmergencyStop}
+              disabled={!accessToken || pendingAction === "emergency_stop"}
+            >
+              <span aria-hidden="true">■</span> Parada de emergência
+            </button>
+          </div>
           {statusMessage && <p className="operation-message" role="status">{statusMessage}</p>}
         </section>
       </main>

@@ -38,6 +38,18 @@ export function recordLoginEvent(accessToken) {
   });
 }
 
+export function getCurrentUser(accessToken) {
+  return apiRequest("/api/auth/me", { accessToken });
+}
+
+export function createManagedUser(accessToken, user) {
+  return apiRequest("/api/auth/users", {
+    method: "POST",
+    accessToken,
+    body: JSON.stringify(user),
+  });
+}
+
 export function getRobotStatus(accessToken) {
   return apiRequest("/api/robot/status", { accessToken });
 }

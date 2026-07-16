@@ -1,34 +1,33 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
-import { recordLoginEvent } from "../services/api";
+import { getCurrentUser, recordLoginEvent } from "../services/api";
 import { AuthContext } from "./auth-context";
 
 const AUTH_ERROR_MESSAGES = {
   email_not_confirmed: "Confirme seu e-mail antes de entrar.",
   invalid_credentials: "E-mail ou senha incorretos.",
   email_address_invalid: "Informe um endereço de e-mail válido.",
-  user_already_exists: "Já existe uma conta com este e-mail. Use a opção Entrar.",
-  weak_password: "A senha informada não atende aos requisitos de segurança.",
-  signup_disabled: "A criação de novas contas está desabilitada no Supabase.",
   over_email_send_rate_limit:
     "Muitos e-mails foram solicitados. Aguarde alguns minutos.",
   over_request_rate_limit:
     "Muitas tentativas. Aguarde alguns minutos e tente novamente.",
 };
 
-function getAuthErrorMessage(error, action) {
+function getAuthErrorMessage(error) {
   return (
     AUTH_ERROR_MESSAGES[error?.code] ||
-    (action === "signup"
-      ? "Não foi possível criar a conta. Verifique os dados e tente novamente."
-      : "Não foi possível entrar. Verifique os dados e tente novamente.")
+    "Não foi possível entrar. Verifique os dados e tente novamente."
   );
 }
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
-  const [isLoading, setIsLoading] = useState(Boolean(supabase));
+  const [profileState, setProfileState] = useState({
+    sessionId: null,
+    user: null,
+  });
+  const [isSessionLoading, setIsSessionLoading] = useState(Boolean(supabase));
 
   useEffect(() => {
     if (!supabase) {
@@ -46,14 +45,14 @@ export function AuthProvider({ children }) {
         console.warn("Não foi possível restaurar a sessão salva.", error);
       })
       .finally(() => {
-        if (isActive) setIsLoading(false);
+        if (isActive) setIsSessionLoading(false);
       });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
-      setIsLoading(false);
+      setIsSessionLoading(false);
     });
 
     return () => {
@@ -61,6 +60,39 @@ export function AuthProvider({ children }) {
       subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    const userId = session?.user?.id;
+    const accessToken = session?.access_token;
+    if (!userId || !accessToken) {
+      return undefined;
+    }
+
+    let isActive = true;
+
+    getCurrentUser(accessToken)
+      .then((user) => {
+        if (isActive) setProfileState({ sessionId: userId, user });
+      })
+      .catch((error) => {
+        console.warn("Não foi possível carregar o perfil do usuário.", error);
+        if (isActive) {
+          setProfileState({
+            sessionId: userId,
+            user: {
+              id: userId,
+              email: session.user.email,
+              display_name: null,
+              role: "operator",
+            },
+          });
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [session]);
 
   const signIn = useCallback(async (email, password) => {
     if (!supabase) {
@@ -75,7 +107,7 @@ export function AuthProvider({ children }) {
     });
 
     if (error) {
-      throw new Error(getAuthErrorMessage(error, "signin"));
+      throw new Error(getAuthErrorMessage(error));
     }
 
     try {
@@ -90,39 +122,6 @@ export function AuthProvider({ children }) {
     return data.session;
   }, []);
 
-  const signUp = useCallback(async (email, password) => {
-    if (!supabase) {
-      throw new Error(
-        "Supabase não configurado. Preencha as variáveis VITE_SUPABASE_*.",
-      );
-    }
-
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/login`,
-      },
-    });
-
-    if (error) {
-      throw new Error(getAuthErrorMessage(error, "signup"));
-    }
-
-    if (data.session) {
-      try {
-        await recordLoginEvent(data.session.access_token);
-      } catch (logError) {
-        console.warn(
-          "Conta criada, mas o evento de auditoria não foi salvo.",
-          logError,
-        );
-      }
-    }
-
-    return data.session;
-  }, []);
-
   const signOut = useCallback(async () => {
     if (!supabase) return;
     const { error } = await supabase.auth.signOut();
@@ -130,16 +129,20 @@ export function AuthProvider({ children }) {
   }, []);
 
   const value = useMemo(
-    () => ({
-      session,
-      user: session?.user ?? null,
-      isLoading,
-      isConfigured: isSupabaseConfigured,
-      signIn,
-      signUp,
-      signOut,
-    }),
-    [isLoading, session, signIn, signOut, signUp],
+    () => {
+      const isProfileLoading = Boolean(
+        session?.user?.id && profileState.sessionId !== session.user.id,
+      );
+      return {
+        session,
+        user: isProfileLoading ? null : profileState.user,
+        isLoading: isSessionLoading || isProfileLoading,
+        isConfigured: isSupabaseConfigured,
+        signIn,
+        signOut,
+      };
+    },
+    [isSessionLoading, profileState, session, signIn, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

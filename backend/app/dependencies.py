@@ -8,9 +8,10 @@ from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.config import Settings, get_settings
-from app.models import AuthContext, CurrentUser
-from app.supabase_rest import SupabaseRestClient
+from app.models import AuthContext, CurrentUser, UserRole
 from app.robot_gateway import RobotGatewayClient
+from app.supabase_auth_admin import SupabaseAuthAdminClient
+from app.supabase_rest import SupabaseRestClient
 
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -60,7 +61,24 @@ async def get_auth_context(
         )
 
     payload = response.json()
-    user = CurrentUser(id=payload["id"], email=payload.get("email"))
+    profile_rows = await SupabaseRestClient(settings).select(
+        "profiles",
+        token,
+        columns="display_name,role",
+        filters={"id": payload["id"]},
+        limit=1,
+    )
+    profile = profile_rows[0] if profile_rows else {}
+    try:
+        user_role = UserRole(profile.get("role", UserRole.OPERATOR.value))
+    except ValueError:
+        user_role = UserRole.OPERATOR
+    user = CurrentUser(
+        id=payload["id"],
+        email=payload.get("email"),
+        display_name=profile.get("display_name"),
+        role=user_role,
+    )
     _auth_cache[token_digest] = (time.monotonic(), user)
     if len(_auth_cache) > 256:
         oldest = min(_auth_cache, key=lambda key: _auth_cache[key][0])
@@ -70,6 +88,23 @@ async def get_auth_context(
 
 def get_database(settings: Annotated[Settings, Depends(get_settings)]) -> SupabaseRestClient:
     return SupabaseRestClient(settings)
+
+
+def get_auth_admin(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> SupabaseAuthAdminClient:
+    return SupabaseAuthAdminClient(settings)
+
+
+def require_admin(
+    auth: Annotated[AuthContext, Depends(get_auth_context)],
+) -> AuthContext:
+    if auth.user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas administradores podem gerenciar usuários.",
+        )
+    return auth
 
 
 def get_robot_gateway(

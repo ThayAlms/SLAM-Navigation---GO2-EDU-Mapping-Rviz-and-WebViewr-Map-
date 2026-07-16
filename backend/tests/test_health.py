@@ -16,6 +16,8 @@ def test_expected_routes_are_registered() -> None:
     paths = app.openapi()["paths"]
 
     assert "/health" in paths
+    assert "/api/auth/me" in paths
+    assert "/api/auth/users" in paths
     assert "/api/auth/login-events" in paths
     assert "/api/robot/commands" in paths
     assert "/api/robot/map/points" in paths

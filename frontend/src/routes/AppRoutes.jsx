@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router";
 
-import ProtectedRoute from "../components/ProtectedRoute";
+import ProtectedRoute, { AdminRoute } from "../components/ProtectedRoute";
+import AdminUsersPage from "../pages/AdminUsersPage";
 import DashboardPage from "../pages/DashboardPage";
 import LoginPage from "../pages/LoginPage";
 
@@ -17,6 +18,15 @@ function AppRoutes() {
           <ProtectedRoute>
             <DashboardPage />
           </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/usuarios"
+        element={
+          <AdminRoute>
+            <AdminUsersPage />
+          </AdminRoute>
         }
       />
 

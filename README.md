@@ -29,7 +29,8 @@ O frontend antigo em HTML estático foi substituído pelo aplicativo React. O na
 
 | Recurso | Estado | Implementação |
 | --- | :---: | --- |
-| Login, cadastro e sessão | ✅ | Supabase Auth |
+| Login e sessão | ✅ | Supabase Auth; sem cadastro público |
+| Perfis e criação de usuários | ✅ | Administrador cria operadores ou administradores |
 | Histórico de login | ✅ | FastAPI + `login_logs` com RLS |
 | Painel protegido | ✅ | React Router + sessão Supabase |
 | Câmera frontal | ✅ | RTP/H.264 → gateway → FastAPI → quadro protegido |
@@ -38,7 +39,8 @@ O frontend antigo em HTML estático foi substituído pelo aplicativo React. O na
 | Salvar e reiniciar mapa | ✅ | PCD binário + JSON de metadados |
 | Teleoperação `WASD` | ✅ | Avançar, recuar e girar no próprio eixo |
 | Levantar e deitar | ✅ | API Sport do Go2 |
-| Controle de velocidade | ✅ | 10% a 50%, passos de 5% |
+| Controle de velocidade | ✅ | Faixa completa de 5% a 100%, passos de 5% |
+| Anticolisão nativo | ✅ | Serviço `obstacles_avoid` do próprio Go2 |
 | Parada de emergência | ✅ | Stop + desarme do controle |
 | Fila para operação 4G | ✅ | Supabase `robot_commands` |
 | Solicitação Oracle | 🟡 | Fila criada; processamento externo ainda será conectado |
@@ -101,7 +103,15 @@ No SQL Editor do projeto Supabase, aplique em ordem:
 2. `supabase/migrations/202607150002_sync_auth_profiles.sql`;
 3. `supabase/migrations/202607160003_go2_control_commands.sql`.
 
-Em **Authentication → Providers → Email**, habilite o provedor. Se o projeto for usado somente em ambiente de teste controlado, a confirmação por e-mail pode ser desabilitada para permitir entrada imediata após o cadastro.
+Em **Authentication → Users**, crie manualmente a primeira conta e marque o e-mail como confirmado. Depois, no SQL Editor, torne-a administradora:
+
+```sql
+update public.profiles
+set role = 'admin'
+where email = 'email@empresa.com';
+```
+
+Por fim, desative o cadastro público nas configurações de Authentication. As demais contas serão criadas pelo administrador dentro do painel e já ficarão confirmadas para entrada imediata.
 
 ### 2. Configurar as credenciais locais
 
@@ -156,7 +166,7 @@ WEB_HOST_IP=192.168.123.18 ./run_web.sh
 
 ## Painel e controles
 
-Depois do login, o painel mostra apenas os recursos operacionais pedidos: câmera, mapeamento/localização e teleoperação.
+Depois do login, o usuário comum entra diretamente nos recursos operacionais pedidos: câmera, mapeamento/localização e teleoperação. O administrador vê também a opção **Usuários**, onde pode adicionar operadores ou outros administradores.
 
 | Entrada | Ação |
 | --- | --- |
@@ -169,7 +179,17 @@ Depois do login, o painel mostra apenas os recursos operacionais pedidos: câmer
 | Levantar / Deitar | mudar postura |
 | `−` / `+` | ajustar velocidade segura |
 
-Para mover, o operador precisa habilitar o controle e o robô precisa estar em pé. Um heartbeat é enviado enquanto a tecla permanece pressionada; o watchdog do gateway para o robô em aproximadamente `0,35 s` se os comandos cessarem.
+Para mover, o operador precisa habilitar o controle, o robô precisa estar em pé e o anticolisão nativo precisa estar confirmado. Um heartbeat é enviado enquanto a tecla permanece pressionada; o watchdog do gateway para o robô em aproximadamente `0,35 s` se os comandos cessarem.
+
+O cabeçalho apresenta as marcas XD4 Robotics e Oracle com o mesmo espaço visual. Os botões **Claro** e **Escuro** mudam o tema explicitamente e preservam a escolha no navegador.
+
+## Proteção anticolisão
+
+A locomoção usa diretamente o serviço nativo `obstacles_avoid` do Go2. O nó habilita o switch oficial, confirma seu estado e envia os comandos de velocidade pela mesma API nativa. Isso deixa a distância e a resposta aos sensores sob responsabilidade do controlador embarcado do robô, sem uma segunda zona local alternando os botões da interface.
+
+Se o serviço nativo não confirmar que está habilitado, a locomoção permanece bloqueada. O SLAM e a criação da nuvem de pontos continuam independentes desse estado.
+
+> Esta proteção reduz o risco, mas não transforma o robô em equipamento certificado para segurança de pessoas. O primeiro teste físico deve ser supervisionado, em baixa velocidade, com acesso à parada de emergência e sem usar uma pessoa como primeiro obstáculo.
 
 ## Mapeamento SLAM
 
@@ -198,6 +218,7 @@ Todas as rotas operacionais abaixo exigem `Authorization: Bearer <JWT Supabase>`
 | Método | Rota | Finalidade |
 | --- | --- | --- |
 | `GET` | `/api/auth/me` | usuário autenticado |
+| `POST` | `/api/auth/users` | novo usuário; somente administrador |
 | `POST` | `/api/auth/login-events` | auditoria de login |
 | `GET` | `/api/robot/status` | sensores, pose, postura e velocidade |
 | `GET` | `/api/robot/camera/frame` | último JPEG protegido |
@@ -255,7 +276,8 @@ GitHub com o escopo `workflow`.
 | `robot_status não existe` | aplique as três migrations na ordem |
 | Docker pede senha | informe a senha sudo da Jetson; o script não altera grupos do sistema |
 | Login funciona, log não é salvo | confira a migration, o JWT e a URL do FastAPI no IP correto |
-| Botões estão bloqueados | habilite o controle, levante o robô e confirme `SDK conectado` |
+| Botões estão bloqueados | confirme SDK, postura em pé, LiDAR local e anticolisão nativo |
+| Anticolisão indisponível | confira `/api/obstacles_avoid/response` e a conexão DDS com o Go2 |
 | Câmera sem sinal | confirme `eth0`, multicast `230.1.1.1:1720` e GStreamer |
 | Mapa vazio | confira os três tópicos LIO/IMU/odometria e a origem do mapeamento |
 | Outro equipamento não abre a página | confirme que ele alcança o IP da Jetson e as portas `5173` e `8000` |

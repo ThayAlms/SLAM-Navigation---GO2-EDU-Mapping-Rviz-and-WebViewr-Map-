@@ -265,19 +265,22 @@ class RobotGatewayHandler(BaseHTTPRequestHandler):
             pass
 
     def _camera_frame(self):
-        _, jpeg = self.runtime.camera.wait_frame(-1, timeout=1.0)
-        if jpeg is None:
-            self._json(
-                {"ok": False, "error": "câmera ainda sem quadro"},
-                HTTPStatus.SERVICE_UNAVAILABLE,
-            )
-            return
-        self.send_response(HTTPStatus.OK)
-        self.send_header("Content-Type", "image/jpeg")
-        self.send_header("Content-Length", str(len(jpeg)))
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
-        self.wfile.write(jpeg)
+        try:
+            _, jpeg = self.runtime.camera.wait_frame(-1, timeout=1.0)
+            if jpeg is None:
+                self._json(
+                    {"ok": False, "error": "câmera ainda sem quadro"},
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                )
+                return
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "image/jpeg")
+            self.send_header("Content-Length", str(len(jpeg)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(jpeg)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            pass
 
 
 class RobotGatewayServer(ThreadingHTTPServer):

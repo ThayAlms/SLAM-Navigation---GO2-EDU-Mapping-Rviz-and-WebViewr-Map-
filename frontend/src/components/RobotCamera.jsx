@@ -1,10 +1,20 @@
 import { useEffect, useState } from "react";
 
 import { getRobotCameraFrame } from "../services/api";
+import { isLiveKitEnabled } from "../services/livekit";
+import LiveKitRobotCamera from "./LiveKitRobotCamera";
 
 const FRAME_INTERVAL_MS = 220;
 
 function RobotCamera({ accessToken, connected }) {
+  if (isLiveKitEnabled) {
+    return <LiveKitRobotCamera accessToken={accessToken} />;
+  }
+
+  return <PollingRobotCamera accessToken={accessToken} connected={connected} />;
+}
+
+function PollingRobotCamera({ accessToken, connected }) {
   const [frameUrl, setFrameUrl] = useState("");
   const [failed, setFailed] = useState(false);
 
