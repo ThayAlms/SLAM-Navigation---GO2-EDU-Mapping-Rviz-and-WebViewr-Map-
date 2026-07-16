@@ -162,7 +162,7 @@ def main():
         default=os.environ.get("ROBOT_GATEWAY_API_KEY", ""),
     )
     parser.add_argument("--interval", type=float, default=1.0)
-    parser.add_argument("--max-points", type=int, default=1500)
+    parser.add_argument("--max-points", type=int, default=800)
     parser.add_argument("--timeout", type=float, default=10.0)
     args = parser.parse_args()
 

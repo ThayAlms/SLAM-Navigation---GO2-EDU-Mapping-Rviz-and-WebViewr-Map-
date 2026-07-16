@@ -109,7 +109,7 @@ export LIVEKIT_STREAM_KEY='STREAM-KEY-DO-INGRESS'
 ./robot_gateway/run_livekit_streams.sh
 ```
 
-O script usa FFmpeg para a saída RTMPS e envia até 1.500 pontos por segundo com
+O script usa FFmpeg para a saída RTMPS e envia 800 pontos por segundo com
 `lk room send-data`. A nuvem usa quantização binária e Base64 para ficar abaixo
 do limite de pacote do LiveKit. Os segredos existem somente no ambiente da
 Jetson e nunca devem ser adicionados ao Git.

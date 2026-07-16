@@ -7,6 +7,9 @@ export const TELEMETRY_TOPIC = "go2.telemetry";
 function decodeBase64PointCloud(payload) {
   try {
     const message = JSON.parse(new TextDecoder().decode(payload));
+    if (Array.isArray(message?.points) && message.points.length >= 3) {
+      return message.points;
+    }
     if (message?.encoding !== "go2p-base64" || typeof message.data !== "string") {
       return null;
     }

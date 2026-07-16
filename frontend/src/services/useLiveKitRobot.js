@@ -26,11 +26,15 @@ export function useLiveKitRobot(accessToken) {
 
     function handleData(payload, _participant, _kind, topic) {
       if (!active) return;
-      if (topic === POINT_CLOUD_TOPIC) {
-        const decodedPoints = decodeLiveKitPointCloud(payload);
+
+      const decodedPoints = decodeLiveKitPointCloud(payload);
+      if (topic === POINT_CLOUD_TOPIC || decodedPoints) {
         if (decodedPoints) setPoints(decodedPoints);
-      } else if (topic === TELEMETRY_TOPIC) {
-        const decodedTelemetry = decodeLiveKitTelemetry(payload);
+        return;
+      }
+
+      const decodedTelemetry = decodeLiveKitTelemetry(payload);
+      if (topic === TELEMETRY_TOPIC || decodedTelemetry?.robot_id === "primary") {
         if (decodedTelemetry) setTelemetry(decodedTelemetry);
       }
     }
