@@ -231,7 +231,7 @@ class RobotGatewayHandler(BaseHTTPRequestHandler):
         if command != "stop" and not self.runtime.node._control_armed:
             raise PermissionError("controle bloqueado; habilite-o antes de mover")
         if command == "stop":
-            self.runtime.node.stop_motion()
+            self.runtime.node.stop_motion(clear_safety_block=True)
         else:
             self.runtime.node.move_command(command)
         self._json({"ok": True, "command": command})

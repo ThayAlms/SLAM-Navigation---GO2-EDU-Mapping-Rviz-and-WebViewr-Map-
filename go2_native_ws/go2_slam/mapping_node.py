@@ -42,10 +42,12 @@ REMOTE_SOURCE_API_ID = 1004
 REMOTE_AVOIDANCE_SWITCH_SET_API_ID = 1001
 REMOTE_AVOIDANCE_SWITCH_GET_API_ID = 1002
 POSTURE_TRANSITION_SECONDS = 4.0
+POSTURE_CONFIRMATION_SECONDS = 0.35
+POSTURE_UNKNOWN_SECONDS = 1.5
 MOTION_PUBLISH_PERIOD_SECONDS = 0.02
 MOTION_WATCHDOG_SECONDS = 0.25
-AVOIDANCE_CONFIRMATION_TIMEOUT_SECONDS = 5.0
-REMOTE_SOURCE_CONFIRMATION_TIMEOUT_SECONDS = 5.0
+AVOIDANCE_CONFIRMATION_TIMEOUT_SECONDS = 8.0
+REMOTE_SOURCE_REFRESH_SECONDS = 10.0
 OBSTACLE_STOP_GRACE_SECONDS = 0.65
 OBSTACLE_STOP_CONFIRM_SECONDS = 0.30
 DEFAULT_SPEED_PERCENT = 55
@@ -151,6 +153,8 @@ class Go2MappingNode(Node):
         self._posture_state = "unknown"
         self._posture_target = None
         self._posture_command_at = 0.0
+        self._posture_candidate = None
+        self._posture_candidate_since = 0.0
         self._origin_odom = None
         self._last_keyframe_pose = None
         self._last_keyframe_at = 0.0
@@ -173,6 +177,7 @@ class Go2MappingNode(Node):
         self._native_avoidance_enabled = None
         self._native_avoidance_confirmed_at = 0.0
         self._remote_source_confirmed_at = 0.0
+        self._last_remote_source_request_at = 0.0
         self._remote_source_requests = {}
         self._last_avoidance_request_at = 0.0
         self._last_sport_response = None
@@ -359,16 +364,41 @@ class Go2MappingNode(Node):
             and now - self._posture_command_at < POSTURE_TRANSITION_SECONDS
         ):
             self._posture_state = "transitioning_" + self._posture_target
+            self._posture_candidate = None
+            self._posture_candidate_since = 0.0
             return
         self._posture_target = None
         support_force = sum(max(0.0, value) for value in forces)
-        height = position[2] if len(position) >= 3 else 0.0
-        if support_force > 20.0 or height > 0.18:
-            self._posture_state = "standing"
+        position_height = position[2] if len(position) >= 3 else 0.0
+        body_height = float(msg.body_height)
+        height = (
+            body_height
+            if math.isfinite(body_height) and body_height > 0.0
+            else position_height
+        )
+        if support_force > 20.0 or height > 0.20:
+            candidate = "standing"
         elif support_force < 5.0 and height < 0.14:
-            self._posture_state = "lying"
+            candidate = "lying"
         else:
-            self._posture_state = "unknown"
+            candidate = "unknown"
+
+        if candidate == self._posture_state:
+            self._posture_candidate = candidate
+            self._posture_candidate_since = now
+            return
+        if candidate != self._posture_candidate:
+            self._posture_candidate = candidate
+            self._posture_candidate_since = now
+            return
+
+        confirmation_seconds = (
+            POSTURE_UNKNOWN_SECONDS
+            if candidate == "unknown"
+            else POSTURE_CONFIRMATION_SECONDS
+        )
+        if now - self._posture_candidate_since >= confirmation_seconds:
+            self._posture_state = candidate
 
     def _sport_response_callback(self, msg):
         api_id = int(msg.header.identity.api_id)
@@ -430,12 +460,14 @@ class Go2MappingNode(Node):
             self._last_remote_source_response = response_info
             request_id = int(msg.header.identity.id)
             requested = self._remote_source_requests.pop(request_id, None)
-            if requested is not None and status_code == 0:
+            if requested is None:
+                return
+            if status_code == 0:
                 self._remote_commands_from_api = requested
                 self._remote_source_confirmed_at = (
                     self._last_remote_response_at if requested else 0.0
                 )
-            elif status_code != 0:
+            elif requested:
                 self._remote_commands_from_api = False
                 self._remote_source_confirmed_at = 0.0
 
@@ -449,12 +481,10 @@ class Go2MappingNode(Node):
         )
 
     def _remote_source_ready(self, now=None):
-        now = time.monotonic() if now is None else now
+        del now
         return (
             self._remote_commands_from_api is True
             and self._remote_source_confirmed_at > 0.0
-            and now - self._remote_source_confirmed_at
-            <= REMOTE_SOURCE_CONFIRMATION_TIMEOUT_SECONDS
         )
 
     def _ensure_native_obstacle_avoidance(self):
@@ -475,10 +505,10 @@ class Go2MappingNode(Node):
                     None,
                 )
             )
-        remote_source_age = now - self._remote_source_confirmed_at
         if self._control_armed and (
             not self._remote_source_ready(now)
-            or remote_source_age > REMOTE_SOURCE_CONFIRMATION_TIMEOUT_SECONDS / 2
+            or now - self._last_remote_source_request_at
+            >= REMOTE_SOURCE_REFRESH_SECONDS
         ):
             self._set_remote_command_source(True)
         self._last_avoidance_request_at = now
@@ -997,7 +1027,7 @@ class Go2MappingNode(Node):
             self._set_remote_command_source(True)
         else:
             self._control_armed = False
-            self.stop_motion()
+            self.stop_motion(clear_safety_block=True)
             self._set_remote_command_source(False)
         self.get_logger().info(
             "Controle %s." % ("armado" if enabled else "desarmado")
@@ -1031,6 +1061,7 @@ class Go2MappingNode(Node):
             oldest = next(iter(self._remote_source_requests))
             self._remote_source_requests.pop(oldest, None)
         self.remote_control_pub.publish(request)
+        self._last_remote_source_request_at = time.monotonic()
         if not enabled:
             self._remote_commands_from_api = False
             self._remote_source_confirmed_at = 0.0
@@ -1083,6 +1114,13 @@ class Go2MappingNode(Node):
         profile = MOTION_PROFILES.get(command)
         if profile is None:
             raise ValueError("comando de movimento inválido")
+        if self._safety_blocked:
+            raise RuntimeError(
+                "movimento bloqueado: %s; solte o controle antes de tentar novamente"
+                % SAFETY_REASON_MESSAGES.get(
+                    self._safety_block_reason, self._safety_block_reason
+                )
+            )
         if self._posture_state != "standing":
             raise RuntimeError(
                 "robô está deitado ou mudando de postura; use o botão LEVANTAR"
@@ -1097,9 +1135,6 @@ class Go2MappingNode(Node):
             )
         self._last_command = command
         self._last_command_at = time.monotonic()
-        self._safety_blocked = False
-        self._safety_block_reason = None
-        self._safety_blocked_at = 0.0
         self._obstacle_stall_started_at = 0.0
         self._command_count += 1
         self._command_counts[command] += 1
@@ -1131,9 +1166,13 @@ class Go2MappingNode(Node):
         )
         return selected
 
-    def stop_motion(self, force=False):
+    def stop_motion(self, force=False, clear_safety_block=False):
         with self._control_lock:
             now = time.monotonic()
+            if clear_safety_block:
+                self._safety_blocked = False
+                self._safety_block_reason = None
+                self._safety_blocked_at = 0.0
             if (
                 not force
                 and not self._moving
@@ -1169,13 +1208,18 @@ class Go2MappingNode(Node):
         }
         if posture not in api_ids:
             raise ValueError("comando de postura inválido")
+        target_state = "standing" if posture == "stand_up" else "lying"
+        if self._posture_state == target_state:
+            return
 
-        self.stop_motion()
+        self.stop_motion(clear_safety_block=True)
         request = self._new_sport_request(api_ids[posture])
         self.sport_pub.publish(request)
         self._posture_target = "up" if posture == "stand_up" else "down"
         self._posture_command_at = time.monotonic()
         self._posture_state = "transitioning_" + self._posture_target
+        self._posture_candidate = None
+        self._posture_candidate_since = 0.0
         self.get_logger().warning(
             "Comando de postura enviado: %s."
             % ("LEVANTAR" if posture == "stand_up" else "DEITAR")

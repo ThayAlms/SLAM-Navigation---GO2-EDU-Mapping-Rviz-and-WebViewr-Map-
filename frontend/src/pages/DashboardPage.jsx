@@ -85,13 +85,22 @@ function DashboardPage() {
   const motionTimerRef = useRef(null);
   const motionSessionRef = useRef(0);
   const motionPointerRef = useRef(null);
+  const activeCommandRef = useRef(null);
+  const pressedMotionKeysRef = useRef(new Map());
+  const canMoveRef = useRef(false);
+  const stopMotionRef = useRef(null);
 
   const canMove = Boolean(
     robotStatus.sdk_connected &&
       robotStatus.control_armed &&
       robotStatus.posture === "standing" &&
-      robotStatus.safety_ready,
+      robotStatus.safety_ready &&
+      !robotStatus.safety_blocked,
   );
+
+  useEffect(() => {
+    canMoveRef.current = canMove;
+  }, [canMove]);
 
   const dispatchRobotCommand = useCallback(
     (command, payload = {}) => {
@@ -153,6 +162,7 @@ function DashboardPage() {
       motionPointerRef.current = null;
       window.clearTimeout(motionTimerRef.current);
       motionTimerRef.current = null;
+      activeCommandRef.current = null;
       setActiveCommand(null);
       if (sendStop && accessToken) {
         dispatchRobotCommand("stop").catch((error) => {
@@ -165,11 +175,12 @@ function DashboardPage() {
 
   const beginMotion = useCallback(
     (command) => {
-      if (!accessToken || !canMove) return;
+      if (!accessToken || !canMoveRef.current) return;
       stopMotion(false);
       const motionSession = motionSessionRef.current + 1;
       motionSessionRef.current = motionSession;
       setStatusMessage("");
+      activeCommandRef.current = command;
       setActiveCommand(command);
 
       async function pulse() {
@@ -189,16 +200,22 @@ function DashboardPage() {
 
       pulse();
     },
-    [accessToken, canMove, dispatchRobotCommand, stopMotion],
+    [accessToken, dispatchRobotCommand, stopMotion],
   );
+
+  useEffect(() => {
+    stopMotionRef.current = stopMotion;
+  }, [stopMotion]);
 
   const handleMotionPointerDown = useCallback(
     (event, command) => {
       if (event.pointerType === "mouse" && event.button !== 0) return;
       event.preventDefault();
+      pressedMotionKeysRef.current.clear();
+      beginMotion(command);
+      if (activeCommandRef.current !== command) return;
       motionPointerRef.current = event.pointerId;
       event.currentTarget.setPointerCapture?.(event.pointerId);
-      beginMotion(command);
     },
     [beginMotion],
   );
@@ -235,39 +252,73 @@ function DashboardPage() {
     }
 
     function handleKeyDown(event) {
-      if (event.repeat || ["INPUT", "TEXTAREA"].includes(event.target.tagName)) return;
+      if (["INPUT", "TEXTAREA"].includes(event.target.tagName)) return;
       const key = normalizedKey(event);
       if (key === " ") {
         event.preventDefault();
+        pressedMotionKeysRef.current.clear();
         stopMotion();
         return;
       }
       const command = KEY_COMMANDS[key];
       if (!command) return;
       event.preventDefault();
+      if (event.repeat) return;
+      pressedMotionKeysRef.current.delete(key);
+      pressedMotionKeysRef.current.set(key, command);
       beginMotion(command);
     }
 
     function handleKeyUp(event) {
-      if (KEY_COMMANDS[normalizedKey(event)]) stopMotion();
+      const key = normalizedKey(event);
+      const command = KEY_COMMANDS[key];
+      if (!command) return;
+      event.preventDefault();
+      pressedMotionKeysRef.current.delete(key);
+      if (activeCommandRef.current !== command) return;
+      const remainingCommands = [...pressedMotionKeysRef.current.values()];
+      const remainingCommand = remainingCommands.at(-1);
+      if (remainingCommand) beginMotion(remainingCommand);
+      else stopMotion();
     }
 
     function handleVisibility() {
-      if (document.hidden) stopMotion();
+      if (document.hidden) {
+        pressedMotionKeysRef.current.clear();
+        stopMotion();
+      }
+    }
+
+    function handleWindowBlur() {
+      pressedMotionKeysRef.current.clear();
+      stopMotion();
     }
 
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
-    window.addEventListener("blur", stopMotion);
+    window.addEventListener("blur", handleWindowBlur);
     document.addEventListener("visibilitychange", handleVisibility);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
-      window.removeEventListener("blur", stopMotion);
+      window.removeEventListener("blur", handleWindowBlur);
       document.removeEventListener("visibilitychange", handleVisibility);
-      stopMotion();
     };
   }, [beginMotion, stopMotion]);
+
+  useEffect(() => () => {
+    pressedMotionKeysRef.current.clear();
+    stopMotionRef.current?.();
+  }, []);
+
+  useEffect(() => {
+    if (
+      !activeCommandRef.current ||
+      (canMove && !robotStatus.safety_blocked)
+    ) return;
+    pressedMotionKeysRef.current.clear();
+    stopMotion();
+  }, [canMove, robotStatus.safety_blocked, stopMotion]);
 
   async function handleAction(command, payload, successMessage) {
     if (!accessToken || pendingAction) return;
@@ -313,6 +364,11 @@ function DashboardPage() {
   const speedStep = robotStatus.speed_step_percent;
   const postureControlsDisabled =
     !robotStatus.sdk_connected || !robotStatus.control_armed || Boolean(pendingAction);
+  const postureTransitioning = robotStatus.posture?.startsWith("transitioning_");
+  const standUpDisabled =
+    postureControlsDisabled || postureTransitioning || robotStatus.posture === "standing";
+  const standDownDisabled =
+    postureControlsDisabled || postureTransitioning || robotStatus.posture === "lying";
   const safetyState = robotStatus.safety_blocked
     ? "blocked"
     : robotStatus.safety_ready
@@ -322,7 +378,16 @@ function DashboardPage() {
     ? "Limite detectado · robô parado"
     : robotStatus.safety_ready
       ? "API confirmada"
-      : "Aguardando confirmação";
+      : robotStatus.control_armed && robotStatus.native_avoidance_confirmed
+        ? "Confirmando canal de controle"
+        : "Aguardando confirmação";
+  const controlLabel = robotStatus.safety_blocked
+    ? "LIMITE DE SEGURANÇA"
+    : robotStatus.control_armed
+      ? robotStatus.safety_ready
+        ? "CONTROLE HABILITADO"
+        : "CONFIRMANDO PROTEÇÃO"
+      : "CONTROLE BLOQUEADO";
 
   return (
     <div className="app-layout">
@@ -437,7 +502,7 @@ function DashboardPage() {
               <p>Movimento contínuo, postura e resposta em tempo real.</p>
             </div>
             <span className={`status-label ${robotStatus.control_armed ? "is-armed" : ""}`}>
-              {robotStatus.control_armed ? "CONTROLE HABILITADO" : "CONTROLE BLOQUEADO"}
+              {controlLabel}
             </span>
           </div>
 
@@ -472,25 +537,31 @@ function DashboardPage() {
                 }
               >
                 <strong>{robotStatus.control_armed ? "Bloquear controle" : "Habilitar controle"}</strong>
-                <small>{robotStatus.control_armed ? "Canal ativo · toque para bloquear" : "Toque para ativar o canal"}</small>
+                <small>
+                  {robotStatus.control_armed
+                    ? robotStatus.safety_ready
+                      ? "Canal ativo · toque para bloquear"
+                      : "Aguardando confirmação da Unitree"
+                    : "Toque para ativar o canal"}
+                </small>
               </button>
 
               <div className="teleoperation-posture">
                 <button
                   className="ui-button ui-button--secondary"
                   type="button"
-                  disabled={postureControlsDisabled}
+                  disabled={standUpDisabled}
                   onClick={() => handleAction("stand_up", {}, "Comando para levantar enviado.")}
                 >
-                  <span>↑</span> Levantar
+                  <span>↑</span> {robotStatus.posture === "transitioning_up" ? "Levantando..." : "Levantar"}
                 </button>
                 <button
                   className="ui-button ui-button--secondary"
                   type="button"
-                  disabled={postureControlsDisabled}
+                  disabled={standDownDisabled}
                   onClick={() => handleAction("stand_down", {}, "Comando para deitar enviado.")}
                 >
-                  <span>↓</span> Deitar
+                  <span>↓</span> {robotStatus.posture === "transitioning_down" ? "Deitando..." : "Deitar"}
                 </button>
               </div>
             </section>
@@ -510,7 +581,6 @@ function DashboardPage() {
                   onPointerDown={(event) => handleMotionPointerDown(event, "forward")}
                   onPointerUp={handleMotionPointerEnd}
                   onPointerCancel={handleMotionPointerEnd}
-                  onPointerLeave={handleMotionPointerEnd}
                   onLostPointerCapture={handleMotionPointerEnd}
                 >W<span>↑</span></button>
                 <div className="teleoperation-pad__row">
@@ -521,7 +591,6 @@ function DashboardPage() {
                     onPointerDown={(event) => handleMotionPointerDown(event, "rotate_left")}
                     onPointerUp={handleMotionPointerEnd}
                     onPointerCancel={handleMotionPointerEnd}
-                    onPointerLeave={handleMotionPointerEnd}
                     onLostPointerCapture={handleMotionPointerEnd}
                   >A<span>↶</span></button>
                   <button
@@ -531,7 +600,6 @@ function DashboardPage() {
                     onPointerDown={(event) => handleMotionPointerDown(event, "backward")}
                     onPointerUp={handleMotionPointerEnd}
                     onPointerCancel={handleMotionPointerEnd}
-                    onPointerLeave={handleMotionPointerEnd}
                     onLostPointerCapture={handleMotionPointerEnd}
                   >S<span>↓</span></button>
                   <button
@@ -541,7 +609,6 @@ function DashboardPage() {
                     onPointerDown={(event) => handleMotionPointerDown(event, "rotate_right")}
                     onPointerUp={handleMotionPointerEnd}
                     onPointerCancel={handleMotionPointerEnd}
-                    onPointerLeave={handleMotionPointerEnd}
                     onLostPointerCapture={handleMotionPointerEnd}
                   >D<span>↷</span></button>
                 </div>
