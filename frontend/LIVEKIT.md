@@ -83,8 +83,10 @@ Gere uma chave exclusiva para a ponte da Jetson:
 openssl rand -hex 32
 ```
 
-Cadastre o valor na Vercel como `ROBOT_PUBLISHER_KEY`, marcado como Sensitive,
-em Production e Preview. Não use prefixo `VITE_`. Após salvar, faça redeploy.
+`ROBOT_PUBLISHER_KEY` e a Function da Vercel permanecem disponíveis como
+fallback, mas a Jetson usa por padrão a CLI `lk` já autenticada para enviar a
+nuvem diretamente à sala. Assim, a proteção do deployment da Vercel não
+interfere nos dados do LiDAR.
 
 Crie o Ingress da câmera com a CLI já autenticada:
 
@@ -104,13 +106,10 @@ Em outro terminal, configure apenas a sessão atual e inicie os dois fluxos:
 ```bash
 export LIVEKIT_INGRESS_URL='rtmps://URL-DO-INGRESS'
 export LIVEKIT_STREAM_KEY='STREAM-KEY-DO-INGRESS'
-export VERCEL_APP_URL='https://SEU-DOMINIO.vercel.app'
-export ROBOT_PUBLISHER_KEY='A-MESMA-CHAVE-DA-VERCEL'
-
 ./robot_gateway/run_livekit_streams.sh
 ```
 
-O script detecta automaticamente `rtmp2sink` ou `rtmpsink`, publica a câmera e
-envia até 1.500 pontos por segundo. A nuvem usa quantização binária para ficar
-abaixo do limite de pacote do LiveKit. Os segredos existem somente no ambiente
-da Jetson e na Vercel; nunca devem ser adicionados ao Git.
+O script usa FFmpeg para a saída RTMPS e envia até 1.500 pontos por segundo com
+`lk room send-data`. A nuvem usa quantização binária e Base64 para ficar abaixo
+do limite de pacote do LiveKit. Os segredos existem somente no ambiente da
+Jetson e nunca devem ser adicionados ao Git.

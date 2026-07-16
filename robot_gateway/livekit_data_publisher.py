@@ -2,9 +2,12 @@
 """Publica mapa e telemetria do gateway local na ponte LiveKit da Vercel."""
 
 import argparse
+import base64
 import json
 import os
 import signal
+import struct
+import subprocess
 import time
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -60,6 +63,62 @@ def normalized_status(status):
     }
 
 
+def encode_point_cloud(points):
+    point_count = len(points) // 3
+    minimum = [min(points[axis::3]) for axis in range(3)]
+    maximum = [max(points[axis::3]) for axis in range(3)]
+    scale = [
+        (maximum[axis] - minimum[axis]) / 65535
+        if maximum[axis] > minimum[axis]
+        else 1
+        for axis in range(3)
+    ]
+    payload = bytearray(32 + point_count * 6)
+    payload[0:4] = b"GO2P"
+    struct.pack_into("<BBH", payload, 4, 1, 0, point_count)
+    struct.pack_into("<fff", payload, 8, *minimum)
+    struct.pack_into("<fff", payload, 20, *scale)
+    offset = 32
+    for index in range(0, len(points), 3):
+        for axis in range(3):
+            quantized = round((points[index + axis] - minimum[axis]) / scale[axis])
+            struct.pack_into("<H", payload, offset, max(0, min(65535, quantized)))
+            offset += 2
+    return bytes(payload)
+
+
+def send_cli_data(room, topic, payload, timeout):
+    result = subprocess.run(
+        [
+            "lk",
+            "room",
+            "send-data",
+            "--room",
+            room,
+            "--topic",
+            topic,
+            json.dumps(payload, separators=(",", ":")),
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+    if result.returncode:
+        raise RuntimeError(result.stderr.strip() or "LiveKit CLI recusou os dados")
+
+
+def publish_with_cli(room, points, status, timeout):
+    point_payload = {
+        "encoding": "go2p-base64",
+        "data": base64.b64encode(encode_point_cloud(points)).decode("ascii"),
+    }
+    send_cli_data(room, "go2.pointcloud", point_payload, timeout)
+    send_cli_data(room, "go2.telemetry", status, timeout)
+    return {"point_count": len(points) // 3, "room_name": room}
+
+
 def post_snapshot(url, publisher_key, payload, timeout):
     request = Request(
         url,
@@ -76,6 +135,15 @@ def post_snapshot(url, publisher_key, payload, timeout):
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--transport",
+        choices=("cli", "vercel"),
+        default=os.environ.get("LIVEKIT_DATA_TRANSPORT", "cli"),
+    )
+    parser.add_argument(
+        "--room",
+        default=os.environ.get("LIVEKIT_ROOM_NAME", "go2-primary"),
+    )
     parser.add_argument(
         "--vercel-url",
         default=os.environ.get("VERCEL_APP_URL", ""),
@@ -98,15 +166,19 @@ def main():
     parser.add_argument("--timeout", type=float, default=10.0)
     args = parser.parse_args()
 
-    if not args.vercel_url:
+    if args.transport == "vercel" and not args.vercel_url:
         parser.error("informe VERCEL_APP_URL ou --vercel-url")
-    if not args.publisher_key:
+    if args.transport == "vercel" and not args.publisher_key:
         parser.error("informe ROBOT_PUBLISHER_KEY ou --publisher-key")
     if not 1 <= args.max_points <= 1500:
         parser.error("--max-points deve estar entre 1 e 1500")
 
     gateway_url = args.gateway_url.rstrip("/")
-    publish_url = args.vercel_url.rstrip("/") + "/api/livekit-robot-data"
+    publish_url = (
+        args.vercel_url.rstrip("/") + "/api/livekit-robot-data"
+        if args.transport == "vercel"
+        else ""
+    )
     stopping = False
 
     def stop(_signum=None, _frame=None):
@@ -115,7 +187,13 @@ def main():
 
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGTERM, stop)
-    print("Ponte da nuvem de pontos ativa para %s" % publish_url, flush=True)
+    if args.transport == "cli":
+        print(
+            "Nuvem de pontos direta para a sala %s via LiveKit CLI" % args.room,
+            flush=True,
+        )
+    else:
+        print("Ponte da nuvem de pontos ativa para %s" % publish_url, flush=True)
 
     sequence = 0
     while not stopping:
@@ -130,12 +208,18 @@ def main():
             points = sample_points(point_payload.get("points", []), args.max_points)
             if not points:
                 raise RuntimeError("gateway ainda não possui pontos do LiDAR")
-            result = post_snapshot(
-                publish_url,
-                args.publisher_key,
-                {"points": points, "status": normalized_status(status)},
-                args.timeout,
-            )
+            status = normalized_status(status)
+            if args.transport == "cli":
+                result = publish_with_cli(
+                    args.room, points, status, args.timeout
+                )
+            else:
+                result = post_snapshot(
+                    publish_url,
+                    args.publisher_key,
+                    {"points": points, "status": status},
+                    args.timeout,
+                )
             sequence += 1
             if sequence == 1 or sequence % 10 == 0:
                 print(
@@ -146,7 +230,14 @@ def main():
         except HTTPError as error:
             detail = error.read().decode("utf-8", errors="replace")
             print("Vercel respondeu HTTP %d: %s" % (error.code, detail), flush=True)
-        except (URLError, TimeoutError, RuntimeError, ValueError) as error:
+        except (
+            URLError,
+            TimeoutError,
+            RuntimeError,
+            ValueError,
+            OSError,
+            subprocess.TimeoutExpired,
+        ) as error:
             print("Aguardando dados/publicação: %s" % error, flush=True)
 
         remaining = args.interval - (time.monotonic() - started_at)

@@ -4,12 +4,28 @@ const HEADER_SIZE = 32;
 export const POINT_CLOUD_TOPIC = "go2.pointcloud";
 export const TELEMETRY_TOPIC = "go2.telemetry";
 
-export function decodeLiveKitPointCloud(payload) {
-  if (!(payload instanceof Uint8Array) || payload.byteLength < HEADER_SIZE) {
+function decodeBase64PointCloud(payload) {
+  try {
+    const message = JSON.parse(new TextDecoder().decode(payload));
+    if (message?.encoding !== "go2p-base64" || typeof message.data !== "string") {
+      return null;
+    }
+    const binary = window.atob(message.data);
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    return decodeLiveKitPointCloud(bytes);
+  } catch {
     return null;
   }
+}
+
+export function decodeLiveKitPointCloud(payload) {
+  if (!(payload instanceof Uint8Array) || payload.byteLength < HEADER_SIZE) {
+    return payload instanceof Uint8Array ? decodeBase64PointCloud(payload) : null;
+  }
   for (let index = 0; index < POINT_CLOUD_MAGIC.length; index += 1) {
-    if (payload[index] !== POINT_CLOUD_MAGIC[index]) return null;
+    if (payload[index] !== POINT_CLOUD_MAGIC[index]) {
+      return decodeBase64PointCloud(payload);
+    }
   }
 
   const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
