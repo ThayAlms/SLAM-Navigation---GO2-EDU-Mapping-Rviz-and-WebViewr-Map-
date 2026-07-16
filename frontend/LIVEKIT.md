@@ -113,3 +113,8 @@ O script usa FFmpeg para a saída RTMPS e envia 800 pontos por segundo com
 `lk room send-data`. A nuvem usa quantização binária e Base64 para ficar abaixo
 do limite de pacote do LiveKit. Os segredos existem somente no ambiente da
 Jetson e nunca devem ser adicionados ao Git.
+
+O mesmo script mantém `livekit_command_receiver.py` conectado à sala. Os
+botões do painel enviam pacotes autenticados no tópico `go2.command`; o receptor
+valida a identidade, expiração e duplicidade antes de executar cada ação no
+gateway local. Isso mantém a porta `8081` restrita à própria Jetson.

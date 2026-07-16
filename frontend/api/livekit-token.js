@@ -79,7 +79,7 @@ export default async function handler(request, response) {
       room: roomName,
       canSubscribe: true,
       canPublish: false,
-      canPublishData: false,
+      canPublishData: true,
     });
 
     response.status(201).json({

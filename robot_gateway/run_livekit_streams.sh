@@ -11,6 +11,7 @@ CAMERA_PORT="${GO2_CAMERA_PORT:-1720}"
 CAMERA_INTERFACE="${GO2_CAMERA_INTERFACE:-eth0}"
 PUBLISH_URL="${LIVEKIT_INGRESS_URL%/}/${LIVEKIT_STREAM_KEY}"
 data_pid=""
+command_pid=""
 
 FFMPEG_BIN="${FFMPEG_BIN:-$(command -v ffmpeg || true)}"
 if [[ -z "$FFMPEG_BIN" && -x /home/unitree/.local/bin/ffmpeg ]]; then
@@ -31,14 +32,21 @@ cleanup() {
     kill -TERM "$data_pid" 2>/dev/null || true
     wait "$data_pid" 2>/dev/null || true
   fi
+  if [[ -n "$command_pid" ]] && kill -0 "$command_pid" 2>/dev/null; then
+    kill -TERM "$command_pid" 2>/dev/null || true
+    wait "$command_pid" 2>/dev/null || true
+  fi
 }
 trap cleanup EXIT INT TERM
 
 python3 "$ROOT/livekit_data_publisher.py" &
 data_pid=$!
+python3 "$ROOT/livekit_command_receiver.py" &
+command_pid=$!
 
 echo "Câmera: RTP/H264 $CAMERA_GROUP:$CAMERA_PORT ($CAMERA_INTERFACE) → LiveKit"
 echo "Nuvem: gateway local → LiveKit CLI → sala go2-primary"
+echo "Controle: painel Vercel → LiveKit → gateway local"
 
 gst-launch-1.0 -q -e \
   udpsrc address="$CAMERA_GROUP" port="$CAMERA_PORT" multicast-iface="$CAMERA_INTERFACE" \

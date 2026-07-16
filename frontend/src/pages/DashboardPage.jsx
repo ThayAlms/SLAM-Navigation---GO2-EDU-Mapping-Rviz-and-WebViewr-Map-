@@ -12,6 +12,7 @@ import {
   sendRobotCommand,
 } from "../services/api";
 import { isLiveKitEnabled } from "../services/livekit";
+import { publishLiveKitCommand } from "../services/livekitCommands";
 import { useLiveKitRobot } from "../services/useLiveKitRobot";
 
 const OFFLINE_STATUS = {
@@ -72,6 +73,8 @@ function DashboardPage() {
   const [pendingAction, setPendingAction] = useState("");
   const [isRequestingAnalysis, setIsRequestingAnalysis] = useState(false);
   const liveKit = useLiveKitRobot(accessToken);
+  const liveKitRoom = liveKit.room;
+  const userId = session?.user?.id;
   const robotStatus =
     isLiveKitEnabled && liveKit.telemetry
       ? { ...OFFLINE_STATUS, ...liveKit.telemetry }
@@ -85,6 +88,16 @@ function DashboardPage() {
       robotStatus.control_armed &&
       robotStatus.posture === "standing" &&
       robotStatus.safety_ready,
+  );
+
+  const dispatchRobotCommand = useCallback(
+    (command, payload = {}) => {
+      if (isLiveKitEnabled) {
+        return publishLiveKitCommand(liveKitRoom, userId, command, payload);
+      }
+      return sendRobotCommand(accessToken, command, payload);
+    },
+    [accessToken, liveKitRoom, userId],
   );
   useEffect(() => {
     if (!accessToken || isLiveKitEnabled) return undefined;
@@ -139,12 +152,12 @@ function DashboardPage() {
       motionTimerRef.current = null;
       setActiveCommand(null);
       if (sendStop && accessToken) {
-        sendRobotCommand(accessToken, "stop").catch((error) => {
+        dispatchRobotCommand("stop").catch((error) => {
           setStatusMessage(error.message);
         });
       }
     },
-    [accessToken],
+    [accessToken, dispatchRobotCommand],
   );
 
   const beginMotion = useCallback(
@@ -159,7 +172,7 @@ function DashboardPage() {
       async function pulse() {
         if (motionSessionRef.current !== motionSession) return;
         try {
-          await sendRobotCommand(accessToken, command, { duration_ms: 250 });
+          await dispatchRobotCommand(command, { duration_ms: 250 });
           if (motionSessionRef.current === motionSession) {
             motionTimerRef.current = window.setTimeout(pulse, MOTION_HEARTBEAT_MS);
           }
@@ -173,7 +186,7 @@ function DashboardPage() {
 
       pulse();
     },
-    [accessToken, canMove, stopMotion],
+    [accessToken, canMove, dispatchRobotCommand, stopMotion],
   );
 
   const handleMotionPointerDown = useCallback(
@@ -243,7 +256,7 @@ function DashboardPage() {
     setPendingAction(command);
     setStatusMessage("");
     try {
-      const result = await sendRobotCommand(accessToken, command, payload);
+      const result = await dispatchRobotCommand(command, payload);
       setStatusMessage(successMessage);
       if (command === "save_map" && result?.result?.point_count) {
         setStatusMessage(`Mapa salvo com ${result.result.point_count.toLocaleString("pt-BR")} pontos.`);
