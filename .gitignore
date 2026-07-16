@@ -16,3 +16,16 @@ go2_native_ws/unitree_ros2/cyclonedds_ws/log/
 .DS_Store
 .idea/
 .vscode/
+
+# Credenciais e ambientes locais da aplicação web
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+**/.venv/
+**/node_modules/
+**/dist/
+**/.pytest_cache/
+*.log

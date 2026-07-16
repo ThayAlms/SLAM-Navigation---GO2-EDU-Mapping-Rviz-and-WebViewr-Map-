@@ -9,8 +9,8 @@ source "$PROJECT_ROOT/go2_native_ws/setup_go2.sh"
 set -u
 
 HOST="${HOST:-127.0.0.1}"
-PORT="${PORT:-8080}"
-dashboard_pid=""
+PORT="${PORT:-8081}"
+gateway_pid=""
 
 stop_process() {
   local pid="$1"
@@ -26,16 +26,16 @@ stop_process() {
 cleanup() {
   trap - EXIT INT TERM
   # O painel desarma e envia StopMove durante o encerramento.
-  stop_process "$dashboard_pid"
-  [[ -n "$dashboard_pid" ]] && wait "$dashboard_pid" 2>/dev/null || true
+  stop_process "$gateway_pid"
+  [[ -n "$gateway_pid" ]] && wait "$gateway_pid" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
-echo "Painel operacional: http://$HOST:$PORT"
-echo "O controle começa bloqueado e precisa ser habilitado na página."
+echo "Gateway local do Go2: http://$HOST:$PORT"
+echo "O FastAPI é a única camada que deve expor estes dados ao frontend."
 echo "SLAM: LIO nativo usando /utlidar/cloud_deskewed + /utlidar/robot_odom + /utlidar/imu."
 
 python3 "$ROOT/server.py" --host "$HOST" --port "$PORT" &
-dashboard_pid=$!
+gateway_pid=$!
 
-wait "$dashboard_pid"
+wait "$gateway_pid"

@@ -1,0 +1,64 @@
+from types import SimpleNamespace
+
+import pytest
+
+from app.config import Settings
+from app.robot_gateway import RobotGatewayClient, RobotGatewayRejected
+from app.routers.robot import normalize_gateway_status
+
+
+def make_gateway() -> RobotGatewayClient:
+    return RobotGatewayClient(
+        Settings(
+            robot_gateway_url="http://127.0.0.1:8081",
+            robot_gateway_api_key="test-key",
+        )
+    )
+
+
+@pytest.mark.asyncio
+async def test_commands_are_mapped_to_gateway_routes(monkeypatch) -> None:
+    gateway = make_gateway()
+    calls = []
+
+    async def fake_request(method, path, *, json=None):
+        calls.append((method, path, json))
+        return SimpleNamespace(json=lambda: {"ok": True})
+
+    monkeypatch.setattr(gateway, "_request", fake_request)
+
+    await gateway.execute("forward")
+    await gateway.execute("stand_up")
+    await gateway.execute("set_speed", {"percent": 35})
+    await gateway.execute("emergency_stop")
+
+    assert calls == [
+        ("POST", "/api/control/move", {"command": "forward"}),
+        ("POST", "/api/control/posture", {"command": "stand_up"}),
+        ("POST", "/api/control/speed", {"percent": 35}),
+        ("POST", "/api/control/stop", {}),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_unknown_command_is_rejected() -> None:
+    with pytest.raises(RobotGatewayRejected):
+        await make_gateway().execute("dance")
+
+
+def test_gateway_status_is_normalized_for_frontend() -> None:
+    payload = normalize_gateway_status(
+        {
+            "robot_connected": True,
+            "camera_connected": True,
+            "lio_connected": True,
+            "control_armed": False,
+            "point_count": 42,
+        }
+    )
+
+    assert payload["robot_online"] is True
+    assert payload["sdk_connected"] is True
+    assert payload["gateway_connected"] is True
+    assert payload["video_stream_url"] == "/api/robot/camera/frame"
+    assert payload["map_data_url"] == "/api/robot/map/points"

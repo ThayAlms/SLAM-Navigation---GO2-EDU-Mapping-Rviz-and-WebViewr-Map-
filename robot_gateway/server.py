@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""Servidor local do painel: ROS 2, mapa 3D, câmera MJPEG e teleop seguro."""
+"""Gateway local do Go2: ROS 2, mapa, câmera e comandos para o FastAPI."""
 
 import argparse
+import hmac
 import json
+import os
 import signal
 import sys
 import threading
 import time
 from http import HTTPStatus
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -89,9 +91,10 @@ class CameraStream:
         self.thread.join(timeout=2.0)
 
 
-class DashboardRuntime:
-    def __init__(self):
+class RobotGatewayRuntime:
+    def __init__(self, gateway_key=""):
         rclpy.init()
+        self.gateway_key = gateway_key
         self.node = Go2MappingNode()
         self.camera = CameraStream()
         self.executor = SingleThreadedExecutor()
@@ -124,11 +127,8 @@ class DashboardRuntime:
         return xyz.reshape(-1).tolist()
 
 
-class DashboardHandler(SimpleHTTPRequestHandler):
-    server_version = "Go2Dashboard/1.0"
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=str(ROOT), **kwargs)
+class RobotGatewayHandler(BaseHTTPRequestHandler):
+    server_version = "Go2Gateway/1.0"
 
     @property
     def runtime(self):
@@ -154,19 +154,47 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return {}
         return json.loads(self.rfile.read(length).decode("utf-8"))
 
+    def _authorized(self):
+        expected = self.runtime.gateway_key
+        if not expected:
+            return True
+        provided = self.headers.get("X-Gateway-Key", "")
+        return bool(provided) and hmac.compare_digest(expected, provided)
+
+    def _require_authorized(self):
+        if self._authorized():
+            return True
+        self._json(
+            {"ok": False, "error": "chave do gateway inválida"},
+            HTTPStatus.UNAUTHORIZED,
+        )
+        return False
+
     def do_GET(self):
         path = urlparse(self.path).path
+        if path == "/health":
+            self._json({"status": "ok", "service": "go2-gateway"})
+            return
+        if not self._require_authorized():
+            return
         if path == "/api/status":
             self._json(self.runtime.status())
         elif path == "/api/map/points":
             self._json({"points": self.runtime.map_points()})
+        elif path == "/api/camera/frame":
+            self._camera_frame()
         elif path == "/camera.mjpg":
             self._mjpeg()
         else:
-            super().do_GET()
+            self._json(
+                {"ok": False, "error": "rota inexistente"},
+                HTTPStatus.NOT_FOUND,
+            )
 
     def do_POST(self):
         path = urlparse(self.path).path
+        if not self._require_authorized():
+            return
         try:
             body = self._body()
             if path == "/api/control/arm":
@@ -236,25 +264,44 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
             pass
 
+    def _camera_frame(self):
+        _, jpeg = self.runtime.camera.wait_frame(-1, timeout=1.0)
+        if jpeg is None:
+            self._json(
+                {"ok": False, "error": "câmera ainda sem quadro"},
+                HTTPStatus.SERVICE_UNAVAILABLE,
+            )
+            return
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "image/jpeg")
+        self.send_header("Content-Length", str(len(jpeg)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(jpeg)
 
-class DashboardServer(ThreadingHTTPServer):
+
+class RobotGatewayServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
     def __init__(self, address, runtime):
         self.runtime = runtime
-        super().__init__(address, DashboardHandler)
+        super().__init__(address, RobotGatewayHandler)
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8080)
+    parser.add_argument("--port", type=int, default=8081)
+    parser.add_argument(
+        "--gateway-key",
+        default=os.environ.get("ROBOT_GATEWAY_API_KEY", ""),
+    )
     args = parser.parse_args()
 
-    runtime = DashboardRuntime()
+    runtime = RobotGatewayRuntime(gateway_key=args.gateway_key)
     runtime.start()
-    server = DashboardServer((args.host, args.port), runtime)
+    server = RobotGatewayServer((args.host, args.port), runtime)
 
     stop_event = threading.Event()
 
@@ -266,7 +313,11 @@ def main():
 
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGTERM, stop)
-    print("Painel Go2 ativo em http://%s:%d" % (args.host, args.port), flush=True)
+    print(
+        "Gateway Go2 ativo em http://%s:%d (autenticação %s)"
+        % (args.host, args.port, "ativa" if args.gateway_key else "local"),
+        flush=True,
+    )
     try:
         server.serve_forever(poll_interval=0.25)
     finally:
