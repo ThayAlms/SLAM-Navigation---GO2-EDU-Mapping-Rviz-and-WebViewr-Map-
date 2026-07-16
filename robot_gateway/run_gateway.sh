@@ -3,9 +3,26 @@ set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$ROOT/.." && pwd)"
+RUNTIME_ROOT="${GO2_RUNTIME_ROOT:-$PROJECT_ROOT}"
+ROS_INSTALL="$RUNTIME_ROOT/go2_native_ws/unitree_ros2/cyclonedds_ws/install/setup.bash"
+
+# build/install não são versionados. Durante a migração local, reutiliza o
+# workspace compilado do projeto anterior sem voltar para o frontend antigo.
+if [[ ! -f "$ROS_INSTALL" ]]; then
+  LEGACY_RUNTIME_ROOT="$(cd "$PROJECT_ROOT/../Teleop_Go2" 2>/dev/null && pwd || true)"
+  LEGACY_ROS_INSTALL="$LEGACY_RUNTIME_ROOT/go2_native_ws/unitree_ros2/cyclonedds_ws/install/setup.bash"
+  if [[ -n "$LEGACY_RUNTIME_ROOT" && -f "$LEGACY_ROS_INSTALL" ]]; then
+    RUNTIME_ROOT="$LEGACY_RUNTIME_ROOT"
+    ROS_INSTALL="$LEGACY_ROS_INSTALL"
+  else
+    echo "[ERRO] Ambiente ROS compilado não encontrado." >&2
+    echo "       Compile go2_native_ws ou informe GO2_RUNTIME_ROOT=/caminho/do/projeto." >&2
+    exit 1
+  fi
+fi
 
 set +u
-source "$PROJECT_ROOT/go2_native_ws/setup_go2.sh"
+source "$RUNTIME_ROOT/go2_native_ws/setup_go2.sh"
 set -u
 
 HOST="${HOST:-127.0.0.1}"
@@ -32,6 +49,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo "Gateway local do Go2: http://$HOST:$PORT"
+echo "Ambiente ROS compilado: $RUNTIME_ROOT"
 echo "O FastAPI é a única camada que deve expor estes dados ao frontend."
 echo "SLAM: LIO nativo usando /utlidar/cloud_deskewed + /utlidar/robot_odom + /utlidar/imu."
 
