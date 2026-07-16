@@ -64,6 +64,13 @@ status_payload="$(
 [[ "$status_payload" == *'"robot_id":"primary"'* ]] ||
   fail "A tabela robot_status/origem primary não existe. Aplique as migrations de supabase/migrations."
 
+for table in profiles login_logs robot_commands oracle_analyses; do
+  curl --silent --show-error --fail --max-time 10 \
+    "${database_headers[@]}" \
+    "$backend_url/rest/v1/$table?select=*&limit=1" >/dev/null ||
+    fail "A tabela $table não está acessível com a chave do backend."
+done
+
 echo "[OK] Supabase Auth acessível."
 echo "[OK] Frontend e backend usam o mesmo projeto e a mesma chave pública."
-echo "[OK] Banco acessível e migrations do Go2 aplicadas."
+echo "[OK] As cinco tabelas do banco estão acessíveis e as migrations do Go2 foram aplicadas."
