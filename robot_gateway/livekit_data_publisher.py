@@ -73,6 +73,7 @@ def normalized_status(status):
         "obstacle_avoidance_enabled",
         "obstacle_avoidance_requested",
         "obstacle_avoidance_state_confirmed",
+        "obstacle_avoidance_command_ready",
         "native_avoidance_confirmed",
         "native_avoidance_confirmation_age_seconds",
         "safety_mode",
@@ -80,6 +81,7 @@ def normalized_status(status):
         "safety_blocked",
         "safety_block_reason",
         "remote_source_confirmed",
+        "remote_source_operational",
         "last_avoidance_response",
         "last_remote_source_response",
     )

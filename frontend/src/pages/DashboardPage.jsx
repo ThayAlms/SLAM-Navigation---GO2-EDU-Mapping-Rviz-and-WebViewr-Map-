@@ -35,12 +35,14 @@ const OFFLINE_STATUS = {
   obstacle_avoidance_enabled: false,
   obstacle_avoidance_requested: false,
   obstacle_avoidance_state_confirmed: false,
+  obstacle_avoidance_command_ready: false,
   native_avoidance_confirmed: false,
   safety_mode: "unitree_native_obstacles_avoid",
   safety_ready: false,
   safety_blocked: false,
   safety_block_reason: null,
   remote_source_confirmed: false,
+  remote_source_operational: false,
 };
 
 const STATUS_REFRESH_INTERVAL_MS = 1_000;
@@ -379,38 +381,38 @@ function DashboardPage() {
   const standDownDisabled =
     postureControlsDisabled || postureTransitioning || robotStatus.posture === "lying";
   const avoidanceEnabled = Boolean(robotStatus.obstacle_avoidance_enabled);
+  const avoidanceRequested = Boolean(
+    robotStatus.obstacle_avoidance_requested,
+  );
   const avoidanceStateConfirmed = Boolean(
     robotStatus.obstacle_avoidance_state_confirmed,
   );
   const nativeAvoidanceConfirmed = Boolean(
     robotStatus.native_avoidance_confirmed,
   );
-  const avoidanceConfirmed = avoidanceEnabled
-    ? avoidanceStateConfirmed && nativeAvoidanceConfirmed
-    : avoidanceStateConfirmed;
-  const avoidanceChanging =
-    pendingAction === "set_obstacle_avoidance" || !avoidanceConfirmed;
+  const avoidanceConfirmed = avoidanceRequested
+    ? avoidanceEnabled && avoidanceStateConfirmed && nativeAvoidanceConfirmed
+    : avoidanceStateConfirmed && !avoidanceEnabled;
+  const avoidanceChanging = pendingAction === "set_obstacle_avoidance";
   const safetyState = robotStatus.safety_blocked
     ? "blocked"
-    : avoidanceConfirmed && !avoidanceEnabled
+    : !avoidanceRequested
       ? "unprotected"
-      : robotStatus.safety_ready
+      : avoidanceConfirmed
       ? "protected"
       : "unavailable";
   const safetyLabel = robotStatus.safety_blocked
     ? "Limite detectado · robô parado"
-    : avoidanceConfirmed && !avoidanceEnabled
-      ? "Modo livre confirmado · sem barreira de obstáculos"
-      : robotStatus.safety_ready
-      ? "API confirmada"
-      : robotStatus.control_armed && robotStatus.native_avoidance_confirmed
-        ? "Confirmando canal de controle"
-        : "Aguardando confirmação";
-  const safetyTitle = avoidanceEnabled
-    ? "Proteção Unitree"
+    : !avoidanceRequested
+      ? "Modo livre selecionado · sem proteção confirmada"
+      : avoidanceConfirmed
+        ? "API confirmada"
+        : "Comando enviado · firmware sem confirmação";
+  const safetyTitle = !avoidanceRequested
+    ? "Obstacle Avoidance desativado"
     : avoidanceConfirmed
-      ? "Anticolisão desabilitada"
-      : "Confirmando anticolisão";
+      ? "Proteção Unitree"
+      : "Obstacle Avoidance solicitado";
   const controlLabel = robotStatus.safety_blocked
     ? "LIMITE DE SEGURANÇA"
     : robotStatus.control_armed
@@ -528,9 +530,11 @@ function DashboardPage() {
                     {},
                     robotStatus.control_armed
                       ? "Controle bloqueado."
-                      : avoidanceEnabled
-                        ? "Controle habilitado com anticolisão."
-                        : "Controle habilitado em modo livre.",
+                      : avoidanceConfirmed
+                        ? "Controle habilitado com anticolisão confirmado."
+                        : avoidanceRequested
+                          ? "Controle habilitado; proteção solicitada sem confirmação nativa."
+                          : "Controle habilitado em modo livre.",
                   )
                 }
               >
@@ -545,19 +549,18 @@ function DashboardPage() {
               </button>
 
               <button
-                className={`ui-button teleoperation-avoidance-button ${avoidanceEnabled ? "is-enabled" : "is-disabled"}`}
+                className={`ui-button teleoperation-avoidance-button ${avoidanceRequested ? "is-enabled" : "is-disabled"}`}
                 type="button"
-                aria-pressed={avoidanceEnabled}
+                aria-pressed={avoidanceRequested}
                 disabled={
                   !robotStatus.sdk_connected ||
-                  Boolean(pendingAction) ||
-                  !avoidanceConfirmed
+                  Boolean(pendingAction)
                 }
                 onClick={() =>
                   handleAction(
                     "set_obstacle_avoidance",
-                    { enabled: !avoidanceEnabled },
-                    avoidanceEnabled
+                    { enabled: !avoidanceRequested },
+                    avoidanceRequested
                       ? "Desativação do anticolisão enviada."
                       : "Ativação do anticolisão enviada.",
                   )
@@ -566,18 +569,18 @@ function DashboardPage() {
                 <strong>
                   {avoidanceChanging
                     ? "Confirmando Obstacle Avoidance..."
-                    : avoidanceEnabled
+                    : avoidanceRequested
                       ? "Desativar Obstacle Avoidance"
                       : "Ativar Obstacle Avoidance"}
                 </strong>
                 <small>
-                  {avoidanceEnabled
-                    ? nativeAvoidanceConfirmed
+                  {avoidanceRequested
+                    ? avoidanceConfirmed
                       ? "Proteção nativa confirmada e ativa"
-                      : "Aguardando confirmação nativa"
+                      : "Solicitado · confirmação nativa indisponível"
                     : avoidanceStateConfirmed
                       ? "Estado nativo confirmado como desativado"
-                      : "Aguardando estado real do robô"}
+                      : "Modo livre solicitado · sem proteção confirmada"}
                 </small>
               </button>
 

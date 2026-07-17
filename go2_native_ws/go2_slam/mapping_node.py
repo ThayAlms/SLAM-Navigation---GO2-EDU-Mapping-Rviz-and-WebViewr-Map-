@@ -524,12 +524,23 @@ class Go2MappingNode(Node):
             <= AVOIDANCE_CONFIRMATION_TIMEOUT_SECONDS
         )
 
+    def _obstacle_avoidance_command_ready(self, now=None):
+        now = time.monotonic() if now is None else now
+        return self._obstacle_avoidance_state_ready(now) or (
+            self._last_avoidance_request_at > 0.0
+            and now - self._last_avoidance_request_at
+            <= AVOIDANCE_CONFIRMATION_TIMEOUT_SECONDS
+        )
+
     def _remote_source_ready(self, now=None):
         del now
         return (
             self._remote_commands_from_api is True
             and self._remote_source_confirmed_at > 0.0
         )
+
+    def _remote_source_operational(self):
+        return self._remote_commands_from_api is True
 
     def _ensure_native_obstacle_avoidance(self):
         now = time.monotonic()
@@ -551,13 +562,13 @@ class Go2MappingNode(Node):
     def _movement_safety_reason(self, vx, vy, vyaw):
         del vx, vy, vyaw
         now = time.monotonic()
-        if not self._obstacle_avoidance_state_ready(now):
+        if not self._obstacle_avoidance_command_ready(now):
             return (
                 "native_avoidance_unconfirmed"
                 if self._obstacle_avoidance_requested
                 else "avoidance_mode_unconfirmed"
             )
-        if self._control_armed and not self._remote_source_ready(now):
+        if self._control_armed and not self._remote_source_operational():
             return "remote_source_unconfirmed"
         if now - self._last_sport_state_at > SPORT_STATE_SAFETY_TIMEOUT_SECONDS:
             return "sport_state_unavailable"
@@ -820,9 +831,13 @@ class Go2MappingNode(Node):
         )
         native_avoidance_ready = self._native_avoidance_ready(now)
         avoidance_state_ready = self._obstacle_avoidance_state_ready(now)
+        avoidance_command_ready = (
+            self._obstacle_avoidance_command_ready(now)
+        )
         remote_source_ready = self._remote_source_ready(now)
-        safety_ready = avoidance_state_ready and (
-            not self._control_armed or remote_source_ready
+        remote_source_operational = self._remote_source_operational()
+        safety_ready = avoidance_command_ready and (
+            not self._control_armed or remote_source_operational
         )
         with self._lock:
             point_count = sum(
@@ -873,6 +888,7 @@ class Go2MappingNode(Node):
                 self._obstacle_avoidance_requested
             ),
             "obstacle_avoidance_state_confirmed": avoidance_state_ready,
+            "obstacle_avoidance_command_ready": avoidance_command_ready,
             "native_avoidance_switch": self._native_avoidance_enabled,
             "native_avoidance_confirmed": native_avoidance_ready,
             "native_avoidance_confirmation_age_seconds": (
@@ -890,6 +906,7 @@ class Go2MappingNode(Node):
             ),
             "remote_commands_from_api": self._remote_commands_from_api,
             "remote_source_confirmed": remote_source_ready,
+            "remote_source_operational": remote_source_operational,
             "last_avoidance_response": self._last_avoidance_response,
             "last_remote_source_response": self._last_remote_source_response,
             "last_remote_response": self._last_remote_response,
@@ -1075,9 +1092,9 @@ class Go2MappingNode(Node):
         enabled = bool(enabled)
         if enabled:
             self._ensure_native_obstacle_avoidance()
-            if not self._obstacle_avoidance_state_ready():
+            if not self._obstacle_avoidance_command_ready():
                 raise RuntimeError(
-                    "controle bloqueado: modo do anticolisão não confirmado"
+                    "controle bloqueado: comando do anticolisão não enviado"
                 )
             self._control_armed = True
             self._set_remote_command_source(True)
@@ -1150,8 +1167,8 @@ class Go2MappingNode(Node):
             self._remote_source_requests.pop(oldest, None)
         self.remote_control_pub.publish(request)
         self._last_remote_source_request_at = time.monotonic()
+        self._remote_commands_from_api = bool(enabled)
         if not enabled:
-            self._remote_commands_from_api = False
             self._remote_source_confirmed_at = 0.0
 
     def _publish_remote_move(self, vx, vy, vyaw, noreply=False):

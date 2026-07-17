@@ -40,9 +40,11 @@ OFFLINE_STATUS = {
     "obstacle_avoidance_enabled": False,
     "obstacle_avoidance_requested": False,
     "obstacle_avoidance_state_confirmed": False,
+    "obstacle_avoidance_command_ready": False,
     "native_avoidance_switch": None,
     "safety_mode": "unitree_native_obstacles_avoid",
     "safety_ready": False,
+    "remote_source_operational": False,
     "safety_blocked": False,
 }
 

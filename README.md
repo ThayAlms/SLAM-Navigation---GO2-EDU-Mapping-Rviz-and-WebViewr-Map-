@@ -254,7 +254,11 @@ O cabeçalho apresenta as marcas XD4 Robotics e Oracle com o mesmo espaço visua
 
 A locomoção usa diretamente o serviço nativo `obstacles_avoid` do Go2. O nó envia `enable: true` ou `enable: false`, confirma o estado real e envia os comandos de velocidade pela mesma API nativa. Quando habilitado, a distância e a resposta aos sensores ficam sob responsabilidade do controlador embarcado do robô.
 
-Se o serviço nativo não confirmar o estado solicitado, a locomoção permanece bloqueada. O SLAM e a criação da nuvem de pontos continuam independentes desse estado.
+O painel diferencia o comando enviado da confirmação nativa. Em firmwares que
+não respondem ao canal de confirmação, a central continua operacional, mantém
+`native_avoidance_confirmed=false` visível e não apresenta a proteção como
+confirmada. O SLAM e a criação da nuvem de pontos continuam independentes desse
+estado.
 
 > Esta proteção reduz o risco, mas não transforma o robô em equipamento certificado para segurança de pessoas. O primeiro teste físico deve ser supervisionado, em baixa velocidade e sem usar uma pessoa como primeiro obstáculo.
 
