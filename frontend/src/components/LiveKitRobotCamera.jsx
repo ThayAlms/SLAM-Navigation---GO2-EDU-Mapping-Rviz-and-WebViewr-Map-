@@ -12,19 +12,34 @@ function LiveKitRobotCamera({ room, connectionState, errorMessage }) {
   const attachedTrackRef = useRef(null);
   const [hasVideoTrack, setHasVideoTrack] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [playbackError, setPlaybackError] = useState("");
+  const [mediaError, setMediaError] = useState("");
 
   const startPlayback = useCallback(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || !attachedTrackRef.current) return;
     video.muted = true;
+    video.defaultMuted = true;
+    video.autoplay = true;
+    video.playsInline = true;
+    video.setAttribute("muted", "");
+    video.setAttribute("playsinline", "");
     const result = video.play();
     if (result?.catch) {
       result.catch(() => {
-        setPlaybackError("Toque para iniciar a imagem da câmera.");
+        // A troca do MediaStream pode interromper temporariamente play().
+        // O efeito abaixo tenta novamente sem exigir interação do operador.
+        setIsStreaming(false);
       });
     }
   }, []);
+
+  useEffect(() => {
+    if (!hasVideoTrack || isStreaming) return undefined;
+
+    startPlayback();
+    const retryTimer = window.setInterval(startPlayback, 800);
+    return () => window.clearInterval(retryTimer);
+  }, [hasVideoTrack, isStreaming, startPlayback]);
 
   useEffect(() => {
     if (!room) return undefined;
@@ -36,16 +51,21 @@ function LiveKitRobotCamera({ room, connectionState, errorMessage }) {
       attachedTrackRef.current = null;
       setHasVideoTrack(false);
       setIsStreaming(false);
+      setMediaError("");
     }
 
     function handleTrackSubscribed(track) {
       if (track.kind !== Track.Kind.Video || !videoRef.current) return;
       detachCurrentTrack();
+      videoRef.current.muted = true;
+      videoRef.current.defaultMuted = true;
+      videoRef.current.autoplay = true;
+      videoRef.current.playsInline = true;
       attachedTrackRef.current = track;
       track.attach(videoRef.current);
       setHasVideoTrack(true);
-      setPlaybackError("");
-      startPlayback();
+      setMediaError("");
+      window.requestAnimationFrame(startPlayback);
     }
 
     function handleTrackUnsubscribed(track) {
@@ -88,7 +108,7 @@ function LiveKitRobotCamera({ room, connectionState, errorMessage }) {
   }, [room, startPlayback]);
 
   return (
-    <div className="livekit-camera" onClick={playbackError ? startPlayback : undefined}>
+    <div className="livekit-camera">
       <video
         ref={videoRef}
         className={
@@ -102,34 +122,35 @@ function LiveKitRobotCamera({ room, connectionState, errorMessage }) {
         onCanPlay={startPlayback}
         onPlaying={() => {
           setIsStreaming(true);
-          setPlaybackError("");
+          setMediaError("");
         }}
+        onPause={() => setIsStreaming(false)}
         onWaiting={() => setIsStreaming(false)}
         onError={() => {
           setIsStreaming(false);
-          setPlaybackError("O navegador não conseguiu reproduzir o vídeo.");
+          setMediaError("Reiniciando a câmera automaticamente...");
         }}
       />
 
-      {(!hasVideoTrack || playbackError) && (
+      {(!hasVideoTrack || mediaError) && (
         <div className="stream-empty">
           <span className="stream-empty-icon">◉</span>
           <strong>
-            {playbackError ||
+            {mediaError ||
               CONNECTION_LABELS[connectionState] ||
               "Conectando ao LiveKit"}
           </strong>
           <small>
-            {playbackError
-              ? "Clique nesta área para tentar novamente."
+            {mediaError
+              ? "A reprodução será retomada automaticamente."
               : errorMessage ||
               "Aguardando a Jetson publicar a câmera na sala go2-primary."}
           </small>
         </div>
       )}
 
-      {hasVideoTrack && !isStreaming && !playbackError && (
-        <span className="camera-buffering">Carregando vídeo...</span>
+      {hasVideoTrack && !isStreaming && !mediaError && (
+        <span className="camera-buffering">Iniciando câmera automaticamente...</span>
       )}
     </div>
   );
