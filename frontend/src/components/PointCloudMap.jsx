@@ -12,7 +12,7 @@ function PointCloudMap({ points, pose }) {
   const dragRef = useRef(null);
   const [yaw, setYaw] = useState(-0.65);
   const [pitch, setPitch] = useState(-0.55);
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState(1.12);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -58,7 +58,7 @@ function PointCloudMap({ points, pose }) {
       const centerX = (minX + maxX) / 2;
       const centerY = (minY + maxY) / 2;
       const extent = Math.max(maxX - minX, maxY - minY, 2);
-      const scale = (Math.min(rect.width, rect.height) * 0.78 * zoom) / extent;
+      const scale = (Math.min(rect.width, rect.height) * 0.86 * zoom) / extent;
       const cosY = Math.cos(yaw);
       const sinY = Math.sin(yaw);
       const cosP = Math.cos(pitch);
@@ -107,7 +107,7 @@ function PointCloudMap({ points, pose }) {
       projected.sort((first, second) => first.depth - second.depth);
 
       const heightExtent = Math.max(maxZ - minZ, 0.25);
-      const pointSize = Math.max(1.8, Math.min(3.2, 44 / Math.sqrt(projected.length)));
+      const pointSize = Math.max(2.35, Math.min(4.2, 76 / Math.sqrt(projected.length)));
       const minimumDepth = projected[0]?.depth || 0;
       const maximumDepth = projected[projected.length - 1]?.depth || minimumDepth + 1;
       const depthExtent = Math.max(maximumDepth - minimumDepth, 0.1);
@@ -118,7 +118,12 @@ function PointCloudMap({ points, pose }) {
         const lightness = 54 + height * 12;
         const alpha = 0.58 + depth * 0.36;
         context.fillStyle = `hsla(${hue}, 82%, ${lightness}%, ${alpha})`;
-        context.fillRect(point.x, point.y, pointSize, pointSize);
+        context.fillRect(
+          point.x - pointSize / 2,
+          point.y - pointSize / 2,
+          pointSize,
+          pointSize,
+        );
       }
 
       if (pose) {

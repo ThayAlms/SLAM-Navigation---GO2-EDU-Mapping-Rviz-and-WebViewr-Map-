@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
-import { getCurrentUser, recordLoginEvent } from "../services/api";
+import { recordLoginEvent } from "../services/api";
 import { AuthContext } from "./auth-context";
 
 const AUTH_ERROR_MESSAGES = {
@@ -19,6 +19,32 @@ function getAuthErrorMessage(error) {
     AUTH_ERROR_MESSAGES[error?.code] ||
     "Não foi possível entrar. Verifique os dados e tente novamente."
   );
+}
+
+function fallbackProfile(session) {
+  const role = session.user.app_metadata?.role === "admin" ? "admin" : "operator";
+  return {
+    id: session.user.id,
+    email: session.user.email,
+    display_name: session.user.user_metadata?.display_name || null,
+    role,
+  };
+}
+
+async function loadSessionProfile(session) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id,email,display_name,role")
+    .eq("id", session.user.id)
+    .single();
+
+  if (error) throw error;
+  return {
+    id: data.id,
+    email: data.email || session.user.email,
+    display_name: data.display_name || null,
+    role: data.role === "admin" ? "admin" : "operator",
+  };
 }
 
 export function AuthProvider({ children }) {
@@ -52,6 +78,9 @@ export function AuthProvider({ children }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
+      if (!nextSession) {
+        setProfileState({ sessionId: null, user: null });
+      }
       setIsSessionLoading(false);
     });
 
@@ -63,14 +92,13 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const userId = session?.user?.id;
-    const accessToken = session?.access_token;
-    if (!userId || !accessToken) {
+    if (!userId) {
       return undefined;
     }
 
     let isActive = true;
 
-    getCurrentUser(accessToken)
+    loadSessionProfile(session)
       .then((user) => {
         if (isActive) setProfileState({ sessionId: userId, user });
       })
@@ -79,12 +107,7 @@ export function AuthProvider({ children }) {
         if (isActive) {
           setProfileState({
             sessionId: userId,
-            user: {
-              id: userId,
-              email: session.user.email,
-              display_name: null,
-              role: "operator",
-            },
+            user: fallbackProfile(session),
           });
         }
       });

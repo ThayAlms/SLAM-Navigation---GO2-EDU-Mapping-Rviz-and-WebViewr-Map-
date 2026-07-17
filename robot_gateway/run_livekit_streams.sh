@@ -39,7 +39,8 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-python3 "$ROOT/livekit_data_publisher.py" &
+python3 "$ROOT/livekit_data_publisher.py" \
+  --max-points "${LIVEKIT_MAX_POINTS:-1500}" &
 data_pid=$!
 python3 "$ROOT/livekit_command_receiver.py" &
 command_pid=$!

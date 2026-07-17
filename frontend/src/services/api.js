@@ -1,6 +1,7 @@
 const API_URL =
   (import.meta.env.VITE_API_URL || "http://localhost:8000").replace(/\/$/, "");
 const DEFAULT_ROBOT_ID = "primary";
+const USE_VERCEL_FUNCTIONS = import.meta.env.VITE_LIVEKIT_ENABLED === "true";
 
 async function apiRequest(path, { accessToken, ...options } = {}) {
   const responseType = options.responseType || "json";
@@ -22,7 +23,9 @@ async function apiRequest(path, { accessToken, ...options } = {}) {
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
-    throw new Error(payload?.detail || "Não foi possível concluir a operação.");
+    throw new Error(
+      payload?.detail || payload?.error || "Não foi possível concluir a operação.",
+    );
   }
 
   if (response.status === 204) return null;
@@ -43,11 +46,41 @@ export function getCurrentUser(accessToken) {
 }
 
 export function createManagedUser(accessToken, user) {
+  if (USE_VERCEL_FUNCTIONS) {
+    return sameOriginRequest("/api/admin-users", {
+      method: "POST",
+      accessToken,
+      body: JSON.stringify(user),
+    });
+  }
   return apiRequest("/api/auth/users", {
     method: "POST",
     accessToken,
     body: JSON.stringify(user),
   });
+}
+
+async function sameOriginRequest(path, { accessToken, ...options } = {}) {
+  const headers = new Headers(options.headers);
+  if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+  if (options.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  let response;
+  try {
+    response = await fetch(path, { ...options, headers });
+  } catch {
+    throw new Error("A função da Vercel está indisponível.");
+  }
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(
+      payload?.detail || payload?.error || "Não foi possível concluir a operação.",
+    );
+  }
+  return payload;
 }
 
 export function getRobotStatus(accessToken) {

@@ -90,6 +90,8 @@ O frontend usa o mesmo endpoint nos dois casos. Assim, a futura troca de transpo
 │   └── admin_queries.sql     consultas administrativas somente leitura
 ├── diagnostics/              diagnósticos de rede e sensores
 ├── scripts/check_supabase.sh pré-teste obrigatório do banco remoto
+├── publish_vercel.sh         valida, envia ao GitHub e dispara o deploy
+├── run_vercel.sh             conecta LiDAR, câmera e controle à Vercel
 └── run_web.sh                inicialização completa pelo IP da Jetson
 ```
 
@@ -163,6 +165,45 @@ Se a detecção automática escolher a interface errada:
 ```bash
 WEB_HOST_IP=192.168.123.18 ./run_web.sh
 ```
+
+### Executar com o painel publicado na Vercel
+
+Com o LiveKit e a Vercel já configurados, use apenas:
+
+```bash
+./run_vercel.sh
+```
+
+O comando aproveita o projeto autenticado na CLI `lk`, localiza o Ingress da
+câmera sem salvar suas credenciais no repositório, inicia o gateway ROS/SLAM e
+publica câmera, LiDAR, telemetria e controle remoto. Ele também localiza o
+deployment de produção mais recente e abre o painel no navegador da Jetson.
+
+Para usar um domínio específico ou não abrir o navegador automaticamente:
+
+```bash
+VERCEL_APP_URL=https://painel.exemplo.com ./run_vercel.sh
+OPEN_BROWSER=0 ./run_vercel.sh
+```
+
+### Ver e publicar alterações do frontend
+
+Para testar localmente câmera, mapa e administração antes de publicar, pare uma
+execução ativa com `Ctrl+C` e rode:
+
+```bash
+./run_web.sh
+```
+
+Quando estiver satisfeito, publique sem abrir o painel da Vercel:
+
+```bash
+./publish_vercel.sh "fix: camera, mapa e acesso administrativo"
+```
+
+O script mostra os arquivos alterados, pede confirmação, executa as validações,
+cria o commit e envia a branch `main`. A integração do repositório com a Vercel
+faz o deployment automaticamente após o `push`.
 
 ## Painel e controles
 
@@ -261,7 +302,7 @@ pytest
 # Gateway e scripts
 cd ..
 python3 -m py_compile robot_gateway/server.py go2_native_ws/go2_slam/mapping_node.py
-bash -n run_web.sh scripts/check_supabase.sh robot_gateway/run_gateway.sh
+bash -n run_web.sh run_vercel.sh publish_vercel.sh scripts/check_supabase.sh robot_gateway/run_gateway.sh
 ```
 
 O modelo de workflow em `docs/ci/validation.yml` repete lint, build e testes.

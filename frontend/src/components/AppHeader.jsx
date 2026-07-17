@@ -100,9 +100,15 @@ function AppHeader({ showLogout = false }) {
             <button
               className="header-navigation-button"
               type="button"
+              aria-label={isUserManagement ? "Voltar para a operação" : "Gerenciar usuários"}
               onClick={() => navigate(isUserManagement ? "/dashboard" : "/admin/usuarios")}
             >
-              {isUserManagement ? "Operação" : "Incluir usuário"}
+              <span className="header-navigation-label--desktop">
+                {isUserManagement ? "Operação" : "Incluir usuário"}
+              </span>
+              <span className="header-navigation-label--mobile">
+                {isUserManagement ? "Painel" : "Usuários"}
+              </span>
             </button>
           )}
 

@@ -35,6 +35,7 @@ LIVEKIT_ROOM_NAME=go2-primary
 
 SUPABASE_URL=https://SEU-PROJETO.supabase.co
 SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+SUPABASE_SERVICE_ROLE_KEY=sb_secret_...
 
 VITE_SUPABASE_URL=https://SEU-PROJETO.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
@@ -44,6 +45,8 @@ VITE_LIVEKIT_TOKEN_ENDPOINT=/api/livekit-token
 
 `LIVEKIT_API_SECRET` fica disponível somente para `api/livekit-token.js`. As
 variáveis `VITE_*` são públicas e entram no JavaScript do navegador.
+`SUPABASE_SERVICE_ROLE_KEY` também deve ser marcada como **Sensitive**: ela é
+usada somente pela Function `/api/admin-users` e nunca é enviada ao React.
 
 Depois de salvar as variáveis, faça um novo deployment. Mudanças de ambiente
 não alteram deployments já publicados.
@@ -109,10 +112,11 @@ export LIVEKIT_STREAM_KEY='STREAM-KEY-DO-INGRESS'
 ./robot_gateway/run_livekit_streams.sh
 ```
 
-O script usa FFmpeg para a saída RTMPS e envia 1.200 pontos por segundo com
-`lk room send-data`. A nuvem usa quantização binária e Base64 para ficar abaixo
-do limite de pacote do LiveKit. Os segredos existem somente no ambiente da
-Jetson e nunca devem ser adicionados ao Git.
+O script usa FFmpeg para a saída RTMPS e envia 1.500 pontos por atualização com
+`lk room send-data`. O navegador acumula amostras voxelizadas até 18 mil pontos
+para tornar o ambiente legível. A nuvem usa quantização binária e Base64 para
+ficar abaixo do limite de pacote do LiveKit. Os segredos existem somente no
+ambiente da Jetson e nunca devem ser adicionados ao Git.
 
 O mesmo script mantém `livekit_command_receiver.py` conectado à sala. Os
 botões do painel enviam pacotes autenticados no tópico `go2.command`; o receptor
