@@ -179,6 +179,30 @@ câmera sem salvar suas credenciais no repositório, inicia o gateway ROS/SLAM e
 publica câmera, LiDAR, telemetria e controle remoto. Ele também localiza o
 deployment de produção mais recente e abre o painel no navegador da Jetson.
 
+### Wi-Fi XD4 automático no boot
+
+O serviço `go2-vercel.service` executa
+`scripts/prepare_thaina_network.sh` antes do gateway. Apesar do nome histórico
+do arquivo, ele ativa o perfil `XD4 Local` (SSID `XD4`) com autoconnect e
+prioridade `100`, desativa o autoconnect de perfis cujo nome contenha
+`thaina`, mantém `eth0` somente na rede local do Go2 e instala a rota default
+pela `wlan0`.
+
+Para repetir todas as verificações de rede:
+
+```bash
+./scripts/validate_xd4_network.sh
+```
+
+Os comandos individuais são:
+
+```bash
+nmcli device status
+ip route
+ping -c 3 -W 3 8.8.8.8
+ping -c 3 -W 3 google.com
+```
+
 Para usar um domínio específico ou não abrir o navegador automaticamente:
 
 ```bash
