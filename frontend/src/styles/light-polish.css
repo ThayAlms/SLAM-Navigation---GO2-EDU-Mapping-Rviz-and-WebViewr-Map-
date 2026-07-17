@@ -1,0 +1,255 @@
+/* Camada final do tema claro. Mantida separada para não afetar o tema escuro. */
+
+:root[data-theme="light"] body {
+  background:
+    radial-gradient(circle at 8% 18%, rgba(42, 169, 224, 0.13), transparent 25%),
+    radial-gradient(circle at 94% 76%, rgba(255, 38, 48, 0.055), transparent 24%),
+    linear-gradient(145deg, #ffffff 0%, #f6fafc 45%, #edf5f9 100%);
+}
+
+:root[data-theme="light"] .dashboard-slam-background {
+  opacity: 0.68;
+  filter: saturate(1.85) contrast(1.22);
+  mix-blend-mode: multiply;
+}
+
+:root[data-theme="light"] .login-slam-background {
+  opacity: 0.78;
+  filter: saturate(1.65) contrast(1.16);
+  mix-blend-mode: multiply;
+}
+
+:root[data-theme="light"] .app-header,
+:root[data-theme="light"] .app-header.app-header--scrolled {
+  border-bottom: 1px solid rgba(24, 58, 78, 0.11);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 34px rgba(26, 64, 88, 0.07);
+  backdrop-filter: blur(22px) saturate(1.2);
+}
+
+:root[data-theme="light"] .app-header::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(42, 169, 224, 0.45), transparent);
+  pointer-events: none;
+}
+
+:root[data-theme="light"] .header-menu-trigger,
+:root[data-theme="light"] .theme-toggle {
+  color: #142a37;
+  background: rgba(232, 241, 246, 0.58);
+}
+
+:root[data-theme="light"] .header-menu-trigger:hover,
+:root[data-theme="light"] .theme-toggle:hover {
+  color: #087dac;
+  background: rgba(42, 169, 224, 0.12);
+}
+
+:root[data-theme="light"] .dashboard-page {
+  padding-top: clamp(20px, 2.5vw, 34px);
+}
+
+:root[data-theme="light"] .dashboard-grid {
+  overflow: hidden;
+  border: 1px solid rgba(25, 72, 99, 0.16);
+  border-radius: 20px;
+  background:
+    linear-gradient(115deg, rgba(255, 255, 255, 0.58), rgba(236, 247, 252, 0.34)),
+    rgba(255, 255, 255, 0.3);
+  box-shadow:
+    0 28px 80px rgba(32, 78, 105, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(3px) saturate(1.08);
+}
+
+:root[data-theme="light"] .operation-hud {
+  border-bottom: 1px solid rgba(26, 68, 92, 0.1);
+  background: rgba(255, 255, 255, 0.68);
+  box-shadow: 0 8px 24px rgba(40, 83, 108, 0.04);
+  backdrop-filter: blur(16px);
+}
+
+:root[data-theme="light"] .operation-statuses > span {
+  border-color: rgba(31, 76, 102, 0.14);
+  color: #425c6b;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow:
+    0 5px 16px rgba(34, 76, 100, 0.07),
+    inset 0 1px 0 #ffffff;
+}
+
+:root[data-theme="light"] .operation-statuses > span:first-child {
+  border-color: rgba(42, 169, 224, 0.32);
+  color: #167ba6;
+  background: rgba(42, 169, 224, 0.075);
+}
+
+:root[data-theme="light"] .video-panel {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.24), rgba(42, 169, 224, 0.025));
+}
+
+:root[data-theme="light"] .navigation-panel {
+  background: linear-gradient(215deg, rgba(255, 255, 255, 0.2), rgba(255, 43, 52, 0.018));
+}
+
+:root[data-theme="light"] .demo-empty-feed strong {
+  color: #55707f;
+  text-shadow: 0 1px 0 #ffffff;
+}
+
+:root[data-theme="light"] .viewport-controls .oracle-button,
+:root[data-theme="light"] .viewport-action,
+:root[data-theme="light"] .viewport-action--primary {
+  border-color: rgba(26, 73, 99, 0.3);
+  color: #183847 !important;
+  background: rgba(255, 255, 255, 0.48) !important;
+  box-shadow: 0 8px 20px rgba(32, 73, 96, 0.08) !important;
+  backdrop-filter: blur(12px);
+}
+
+:root[data-theme="light"] .viewport-controls button:not(:disabled):hover {
+  border-color: #2aa9e0 !important;
+  color: #0878a5 !important;
+  background: rgba(42, 169, 224, 0.13) !important;
+  box-shadow: 0 10px 24px rgba(42, 169, 224, 0.15) !important;
+}
+
+:root[data-theme="light"] .teleoperation-panel {
+  border-color: rgba(27, 67, 90, 0.13);
+  background: rgba(255, 255, 255, 0.76);
+  box-shadow:
+    0 24px 64px rgba(31, 73, 98, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(16px);
+}
+
+:root[data-theme="light"] .teleoperation-grid {
+  border-color: rgba(27, 67, 90, 0.12);
+  background: rgba(244, 249, 252, 0.78);
+  box-shadow: inset 0 1px 0 #ffffff;
+}
+
+:root[data-theme="light"] .teleoperation-card {
+  border-color: rgba(27, 67, 90, 0.1);
+}
+
+:root[data-theme="light"] .teleoperation-arm-button,
+:root[data-theme="light"] .teleoperation-posture button,
+:root[data-theme="light"] .teleoperation-key,
+:root[data-theme="light"] .teleoperation-speed__button {
+  border-color: rgba(29, 72, 96, 0.16);
+  color: #183440;
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: 0 5px 14px rgba(31, 72, 95, 0.06);
+}
+
+:root[data-theme="light"] .teleoperation-speed strong,
+:root[data-theme="light"] .teleoperation-posture span,
+:root[data-theme="light"] .teleoperation-key span {
+  color: #168ec0;
+}
+
+:root[data-theme="light"] .user-form,
+:root[data-theme="light"] .access-summary,
+:root[data-theme="light"] .login-card {
+  border-color: rgba(28, 70, 94, 0.13);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 26px 72px rgba(31, 72, 96, 0.12);
+}
+
+@media (max-width: 700px) {
+  :root[data-theme="light"] body {
+    background:
+      radial-gradient(circle at 12% 12%, rgba(42, 169, 224, 0.15), transparent 27%),
+      radial-gradient(circle at 94% 66%, rgba(255, 43, 52, 0.05), transparent 25%),
+      linear-gradient(165deg, #ffffff, #eef6fa);
+  }
+
+  :root[data-theme="light"] .app-header,
+  :root[data-theme="light"] .app-header.app-header--scrolled {
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: 0 8px 24px rgba(28, 68, 91, 0.08);
+  }
+
+  :root[data-theme="light"] .dashboard-page {
+    padding: 12px 10px 28px;
+  }
+
+  :root[data-theme="light"] .dashboard-grid {
+    border-radius: 18px;
+    box-shadow: 0 18px 50px rgba(31, 73, 98, 0.11);
+  }
+
+  :root[data-theme="light"] .operation-hud {
+    padding: 0 10px;
+  }
+
+  :root[data-theme="light"] .operation-statuses {
+    gap: 7px;
+    padding: 0 1px;
+    scroll-snap-type: x proximity;
+  }
+
+  :root[data-theme="light"] .operation-statuses > span {
+    flex-basis: 148px;
+    width: 148px;
+    min-height: 34px;
+    padding: 0 9px;
+    scroll-snap-align: start;
+    box-shadow: 0 4px 12px rgba(34, 76, 100, 0.07);
+  }
+
+  :root[data-theme="light"] .dashboard-grid > .panel,
+  :root[data-theme="light"] .video-placeholder,
+  :root[data-theme="light"] .map-placeholder {
+    min-height: clamp(320px, 58vh, 390px);
+  }
+
+  :root[data-theme="light"] .navigation-panel {
+    border-top: 1px solid rgba(28, 70, 94, 0.09);
+  }
+
+  :root[data-theme="light"] .viewport-controls--camera .oracle-button {
+    width: min(100%, 210px);
+    min-height: 44px;
+  }
+
+  :root[data-theme="light"] .teleoperation-panel {
+    gap: 18px;
+    margin-top: 14px;
+    padding: 20px 14px;
+    border-radius: 18px;
+  }
+
+  :root[data-theme="light"] .teleoperation-heading {
+    align-items: center;
+  }
+
+  :root[data-theme="light"] .teleoperation-grid {
+    border-radius: 14px;
+  }
+
+  :root[data-theme="light"] .teleoperation-card {
+    min-height: 164px;
+    padding: 16px 18px;
+  }
+
+  :root[data-theme="light"] .teleoperation-footer {
+    width: 100%;
+  }
+
+  :root[data-theme="light"] .teleoperation-emergency {
+    width: min(100%, 240px);
+    margin: 0 auto;
+  }
+
+  :root[data-theme="light"] .login-card {
+    border-radius: 18px;
+    box-shadow: 0 20px 56px rgba(31, 72, 96, 0.14);
+  }
+}

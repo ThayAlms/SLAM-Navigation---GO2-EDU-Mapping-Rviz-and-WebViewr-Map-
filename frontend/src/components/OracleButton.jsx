@@ -6,7 +6,7 @@ function OracleButton({ onClick, isLoading = false, disabled = false }) {
       onClick={onClick}
       disabled={disabled || isLoading}
     >
-      {isLoading ? "Enviando análise..." : "Capturar e analisar imagem"}
+      {isLoading ? "PROCESSANDO" : "CAPTURAR IMAGEM"}
     </button>
   );
 }

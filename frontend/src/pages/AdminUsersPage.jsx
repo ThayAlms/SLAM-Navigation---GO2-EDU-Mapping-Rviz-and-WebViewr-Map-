@@ -67,10 +67,10 @@ function AdminUsersPage() {
 
       <main className="user-management-page">
         <section className="user-management-heading">
-          <span className="management-eyebrow">PERFIL ADMINISTRADOR</span>
-          <h1>Adicionar usuário</h1>
+          <span className="management-eyebrow">ADMINISTRAÇÃO DE ACESSOS</span>
+          <h1>Usuários e permissões</h1>
           <p>
-            Crie acessos para operadores do equipamento ou para outros administradores.
+            Crie credenciais para operadores ou conceda acesso administrativo.
           </p>
           <button
             className="ui-button ui-button--primary mobile-add-user-button"
@@ -84,8 +84,8 @@ function AdminUsersPage() {
         <section className="user-management-grid">
           <form id="new-user-form" className="user-form panel" onSubmit={handleSubmit}>
             <div className="user-form-heading">
-              <h2>Novo acesso</h2>
-              <p>O e-mail será confirmado e o acesso ficará disponível imediatamente.</p>
+              <h2>Novo usuário</h2>
+              <p>Preencha os dados e defina o nível de permissão.</p>
             </div>
 
             <label htmlFor="display_name">
@@ -178,7 +178,7 @@ function AdminUsersPage() {
           </form>
 
           <aside className="access-summary panel">
-            <h2>Perfis de acesso</h2>
+            <h2>Níveis de acesso</h2>
             <article>
               <strong>Usuário comum</strong>
               <p>Entra diretamente no painel e opera o equipamento.</p>

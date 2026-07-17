@@ -4,6 +4,7 @@ import AppHeader from "../components/AppHeader";
 import OracleButton from "../components/OracleButton";
 import PointCloudMap from "../components/PointCloudMap";
 import RobotCamera from "../components/RobotCamera";
+import SlamBackground from "../components/SlamBackground";
 import { useAuth } from "../context/useAuth";
 import {
   getRobotMap,
@@ -392,49 +393,21 @@ function DashboardPage() {
   return (
     <div className="app-layout">
       <AppHeader showLogout />
+      <SlamBackground className="dashboard-slam-background" />
 
       <main className="dashboard-page">
-        <section className="dashboard-title">
-          <h1>Painel de operação do Go2</h1>
-          <p>Câmera, nuvem de pontos, localização e controle em tempo real.</p>
-        </section>
-
-        <section className="status-grid status-grid--extended">
-          <article className="status-card">
-            <span>Robô</span>
-            <strong className={robotStatus.robot_online ? "status-online" : "status-offline"}>
-              {robotStatus.robot_online ? "Online" : "Offline"}
-            </strong>
-          </article>
-          <article className="status-card">
-            <span>LIO + IMU</span>
-            <strong className={robotStatus.lio_connected ? "status-online" : "status-offline"}>
-              {robotStatus.lio_connected ? "Estável" : "Aguardando"}
-            </strong>
-          </article>
-          <article className="status-card">
-            <span>Câmera</span>
-            <strong className={robotStatus.camera_connected ? "status-online" : "status-offline"}>
-              {robotStatus.camera_connected ? "Ao vivo" : "Sem sinal"}
-            </strong>
-          </article>
-          <article className="status-card">
-            <span>Mapa</span>
-            <strong>{Number(robotStatus.point_count || 0).toLocaleString("pt-BR")} pts</strong>
-          </article>
-        </section>
-
         <section className="dashboard-grid">
-          <article className="panel video-panel">
-            <div className="panel-header">
-              <div>
-                <h2>Câmera frontal</h2>
-                <p>Quadros protegidos pela sessão do operador.</p>
-              </div>
-              <span className={`status-label ${robotStatus.camera_connected ? "is-online" : ""}`}>
-                {robotStatus.camera_connected ? "AO VIVO" : "SEM SINAL"}
-              </span>
+          <div className="operation-hud">
+            <div className="operation-statuses" aria-label="Status da operação">
+              <span><i /> DADOS REAIS · LIDAR 3D</span>
+              <span>ROBÔ · <strong className={robotStatus.robot_online ? "is-online" : "is-offline"}>{robotStatus.robot_online ? "ONLINE" : "OFFLINE"}</strong></span>
+              <span>LIO + IMU · <strong className={robotStatus.lio_connected ? "is-online" : "is-offline"}>{robotStatus.lio_connected ? "ESTÁVEL" : "AGUARDANDO"}</strong></span>
+              <span>CÂMERA · <strong className={robotStatus.camera_connected ? "is-online" : "is-offline"}>{robotStatus.camera_connected ? "AO VIVO" : "SEM SINAL"}</strong></span>
+              <span>MAPA · <strong>{Number(robotStatus.point_count || 0).toLocaleString("pt-BR")} PTS</strong></span>
             </div>
+            <b>ARRASTE PARA GIRAR · ROLE PARA DAR ZOOM</b>
+          </div>
+          <article className="panel video-panel" aria-label="Câmera frontal">
             <div className="video-placeholder video-placeholder--live">
               <RobotCamera
                 accessToken={accessToken}
@@ -443,30 +416,40 @@ function DashboardPage() {
                 liveKitConnectionState={liveKit.connectionState}
                 liveKitErrorMessage={liveKit.errorMessage}
               />
-              <span className="camera-resolution">GO2 FRONT CAM · 1280 × 720</span>
+              <div className="viewport-controls viewport-controls--camera">
+                <OracleButton
+                  onClick={handleOracleAnalysis}
+                  isLoading={isRequestingAnalysis}
+                  disabled={!robotStatus.camera_connected}
+                />
+              </div>
             </div>
-            <OracleButton
-              onClick={handleOracleAnalysis}
-              isLoading={isRequestingAnalysis}
-              disabled={!robotStatus.camera_connected}
-            />
           </article>
 
-          <article className="panel navigation-panel">
-            <div className="panel-header">
-              <div>
-                <h2>Mapeamento 3D</h2>
-                <p>Nuvem consolidada e localização relativa à origem.</p>
-              </div>
-              <span className={`status-label ${robotStatus.lio_connected ? "is-online" : ""}`}>
-                {robotStatus.lio_connected ? "LIO + IMU" : "AGUARDANDO"}
-              </span>
-            </div>
+          <article className="panel navigation-panel" aria-label="Mapeamento tridimensional">
             <div className="map-placeholder map-placeholder--live">
               <PointCloudMap
                 points={isLiveKitEnabled ? liveKit.points : points}
                 pose={robotStatus.current_pose}
               />
+              <div className="viewport-controls viewport-controls--map">
+                <button
+                  className="viewport-action"
+                  type="button"
+                  onClick={() => handleAction("reset_map", {}, "Novo mapa iniciado.")}
+                  disabled={!robotStatus.lio_connected || Boolean(pendingAction)}
+                >
+                  NOVO MAPA
+                </button>
+                <button
+                  className="viewport-action viewport-action--primary"
+                  type="button"
+                  onClick={() => handleAction("save_map", {}, "Mapa salvo.")}
+                  disabled={!robotStatus.lio_connected || Boolean(pendingAction)}
+                >
+                  SALVAR
+                </button>
+              </div>
             </div>
             <div className="map-location">
               <div><span>X</span><strong>{coordinate(location?.x)}</strong></div>
@@ -474,31 +457,13 @@ function DashboardPage() {
               <div><span>Z</span><strong>{coordinate(location?.z)}</strong></div>
               <div><span>YAW</span><strong>{Number.isFinite(location?.yaw_deg) ? `${location.yaw_deg.toFixed(1)}°` : "--"}</strong></div>
             </div>
-            <div className="map-actions">
-              <button
-                className="ui-button ui-button--secondary"
-                type="button"
-                onClick={() => handleAction("reset_map", {}, "Novo mapa iniciado.")}
-                disabled={!robotStatus.lio_connected || Boolean(pendingAction)}
-              >
-                Novo mapa
-              </button>
-              <button
-                className="ui-button ui-button--primary map-save-button"
-                type="button"
-                onClick={() => handleAction("save_map", {}, "Mapa salvo.")}
-                disabled={!robotStatus.lio_connected || Boolean(pendingAction)}
-              >
-                Salvar mapa
-              </button>
-            </div>
           </article>
         </section>
 
         <section className="panel teleoperation-panel">
           <div className="panel-header teleoperation-heading">
             <div>
-              <h2>Teleoperação</h2>
+              <h2>Central de comandos</h2>
               <p>Movimento contínuo, postura e resposta em tempo real.</p>
             </div>
             <span className={`status-label ${robotStatus.control_armed ? "is-armed" : ""}`}>
@@ -516,7 +481,7 @@ function DashboardPage() {
             <section className="teleoperation-card teleoperation-card--system">
               <div className="teleoperation-card__header">
                 <div>
-                  <strong>Sistema</strong>
+                  <strong>Segurança e postura</strong>
                   <small>Canal de controle e postura</small>
                 </div>
               </div>
@@ -569,7 +534,7 @@ function DashboardPage() {
             <section className="teleoperation-card teleoperation-card--direction">
               <div className="teleoperation-card__header">
                 <div>
-                  <strong>Direção</strong>
+                  <strong>Movimento</strong>
                   <small>WASD · mantenha pressionado</small>
                 </div>
               </div>
@@ -619,7 +584,7 @@ function DashboardPage() {
             <section className="teleoperation-card teleoperation-card--response">
               <div className="teleoperation-card__header">
                 <div>
-                  <strong>Resposta</strong>
+                  <strong>Velocidade</strong>
                   <small>Intensidade do comando nativo</small>
                 </div>
               </div>

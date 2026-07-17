@@ -1006,6 +1006,29 @@ p {
   }
 }
 
+/* A superfície permite enxergar a nuvem animada que corre atrás do painel. */
+:root[data-theme="dark"] .dashboard-grid {
+  background:
+    radial-gradient(circle at 50% 52%, rgba(27, 82, 112, 0.16), transparent 46%),
+    linear-gradient(155deg, rgba(3, 8, 12, 0.82), rgba(3, 9, 14, 0.72));
+  backdrop-filter: blur(2px);
+}
+
+:root[data-theme="light"] .dashboard-grid {
+  background:
+    radial-gradient(circle at 52% 48%, rgba(42, 169, 224, 0.07), transparent 44%),
+    rgba(255, 255, 255, 0.68);
+  backdrop-filter: blur(2px);
+}
+
+.dashboard-slam-background {
+  opacity: 0.18;
+}
+
+:root[data-theme="light"] .dashboard-slam-background {
+  opacity: 0.12;
+}
+
 
 /* =========================================================
    18. INTEGRAÇÃO GO2 — CÂMERA, SLAM E TELEOPERAÇÃO
@@ -1391,6 +1414,281 @@ p {
     min-height: 300px;
     height: 300px;
   }
+}
+
+/* Controles proporcionais e vinculados ao respectivo visor. */
+.viewport-controls--camera {
+  right: auto;
+  left: 18px;
+}
+
+.viewport-controls--camera .oracle-button {
+  width: 232px;
+  min-width: 0;
+  min-height: 52px;
+  margin: 0;
+  font-size: 12px;
+}
+
+@media (max-width: 700px) {
+  .dashboard-grid > .panel {
+    min-height: min(390px, 64vh);
+  }
+
+  .video-placeholder,
+  .map-placeholder {
+    min-height: min(390px, 64vh);
+  }
+
+  .viewport-controls--camera {
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    justify-content: center;
+  }
+
+  .viewport-controls--camera .oracle-button {
+    width: min(100%, 220px);
+    min-height: 44px;
+    padding: 0 16px;
+    border-radius: 10px;
+    font-size: 10px;
+  }
+
+  .viewport-controls--map {
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    justify-content: center;
+  }
+
+  .viewport-controls--map .viewport-action {
+    flex: 1 1 0;
+    width: auto;
+    max-width: 150px;
+    min-width: 0;
+    min-height: 40px;
+    padding: 0 10px;
+    font-size: 8px;
+  }
+
+  .demo-empty-feed strong {
+    padding: 0 16px;
+    font-size: 11px;
+    text-align: center;
+  }
+}
+
+@media (max-width: 380px) {
+  .dashboard-grid > .panel,
+  .video-placeholder,
+  .map-placeholder {
+    min-height: 330px;
+  }
+
+  .viewport-controls--camera .oracle-button {
+    width: min(100%, 190px);
+    min-height: 42px;
+  }
+}
+
+/* Regra final de visibilidade da nuvem animada. */
+:root[data-theme="dark"] .dashboard-grid {
+  background:
+    radial-gradient(circle at 50% 52%, rgba(27, 82, 112, 0.16), transparent 46%),
+    linear-gradient(155deg, rgba(3, 8, 12, 0.82), rgba(3, 9, 14, 0.72));
+  backdrop-filter: blur(2px);
+}
+
+:root[data-theme="light"] .dashboard-grid {
+  background:
+    radial-gradient(circle at 52% 48%, rgba(42, 169, 224, 0.07), transparent 44%),
+    rgba(255, 255, 255, 0.68);
+  backdrop-filter: blur(2px);
+}
+
+.dashboard-slam-background {
+  opacity: 0.18;
+}
+
+:root[data-theme="light"] .dashboard-slam-background {
+  opacity: 0.12;
+}
+
+/* Alinhamento uniforme dos três módulos da central de comandos. */
+.teleoperation-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.teleoperation-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 24px;
+  text-align: center;
+}
+
+.teleoperation-card__header > div {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.teleoperation-card__header strong {
+  width: 100%;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .teleoperation-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =========================================================
+   29. ADMINISTRAÇÃO E AJUSTES FINAIS DO CONSOLE
+   ========================================================= */
+
+.dashboard-page::before {
+  display: none !important;
+  content: none !important;
+  background: none !important;
+}
+
+.teleoperation-card--response {
+  justify-content: center;
+}
+
+.teleoperation-card--response .teleoperation-speed {
+  margin: 14px 0 0;
+}
+
+.user-management-page {
+  position: relative;
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  padding: clamp(34px, 5vw, 64px) 28px;
+}
+
+.user-management-heading {
+  max-width: 680px;
+  margin-bottom: 30px;
+}
+
+.management-eyebrow {
+  margin-bottom: 12px;
+  color: #2aa9e0;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+}
+
+.user-management-heading h1 {
+  margin-bottom: 10px;
+  color: var(--color-text);
+  font-size: clamp(32px, 4vw, 46px);
+  letter-spacing: -0.04em;
+}
+
+.user-management-heading p {
+  max-width: 580px;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.user-management-grid {
+  grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.7fr);
+  gap: 18px;
+}
+
+.user-form,
+.access-summary {
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--color-surface) 86%, transparent);
+  box-shadow: 0 20px 54px rgba(22, 46, 64, 0.06);
+  backdrop-filter: blur(12px);
+}
+
+.user-form {
+  padding: 30px;
+  gap: 20px;
+}
+
+.user-form-heading {
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.user-form-heading h2,
+.access-summary h2 {
+  color: var(--color-text);
+  font-size: 20px;
+}
+
+.user-form label {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.user-form input,
+.user-form select,
+:root[data-theme="light"] .user-form input,
+:root[data-theme="light"] .user-form select {
+  min-height: 50px;
+  border: 1px solid var(--color-border-light);
+  border-radius: 14px;
+  color: var(--color-text);
+  background: var(--color-surface-dark);
+}
+
+.user-form input:focus,
+.user-form select:focus {
+  border-color: #2aa9e0;
+  box-shadow: 0 0 0 4px rgba(42, 169, 224, 0.1);
+}
+
+.user-form > .primary-button {
+  min-height: 50px;
+  border-radius: 14px;
+  color: #ffffff;
+}
+
+.access-summary {
+  align-content: start;
+  padding: 26px;
+}
+
+.access-summary article,
+:root[data-theme="light"] .access-summary article {
+  padding: 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  color: var(--color-text);
+  background: transparent;
+}
+
+.access-summary article strong {
+  color: var(--color-text);
+  font-size: 14px;
+}
+
+.access-summary article p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 820px) {
+  .user-management-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 700px) {
+  .user-management-page { padding: 30px 16px; }
+  .user-form { padding: 22px; }
 }
 
 /* =========================================================
@@ -2975,5 +3273,1930 @@ button:focus-visible {
 @media (min-width: 701px) {
   .mobile-add-user-button {
     display: none;
+  }
+}
+
+/* =========================================================
+   24. DEMO VISUAL XD4 × ORACLE — CENTRO DE OPERAÇÕES
+   ========================================================= */
+
+:root {
+  --header-height: 92px;
+  --content-max-width: 1560px;
+  --radius-small: 16px;
+  --radius-medium: 16px;
+  --radius-large: 16px;
+  --radius-button: 16px;
+  --color-background: #050a10;
+  --color-surface: rgba(9, 16, 24, 0.64);
+  --color-surface-dark: rgba(5, 11, 17, 0.74);
+  --color-border: rgba(137, 166, 190, 0.18);
+  --color-border-light: rgba(137, 166, 190, 0.3);
+  --color-text-secondary: #99a9b7;
+  --color-text-muted: #7e91a1;
+}
+
+body {
+  background:
+    radial-gradient(circle at 82% 18%, rgba(21, 103, 151, 0.12), transparent 31%),
+    linear-gradient(160deg, #04080d 0%, #07131e 68%, #092138 100%);
+}
+
+button,
+input,
+.panel,
+.status-card,
+.login-card,
+.teleoperation-card,
+.video-placeholder,
+.map-placeholder {
+  border-radius: 16px;
+}
+
+/* Header vertical de co-branding */
+.app-header,
+.app-header.app-header--scrolled {
+  height: var(--header-height);
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(3, 7, 11, 0.84);
+  box-shadow: none;
+  backdrop-filter: blur(24px);
+}
+
+.app-header-inner {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  padding: 0 clamp(20px, 4vw, 64px);
+}
+
+.app-header-partners {
+  grid-column: 2;
+  display: grid;
+  grid-template-columns: 126px;
+  justify-items: center;
+  gap: 4px;
+}
+
+.partner-logo-slot {
+  width: 126px;
+  height: 30px;
+}
+
+.partner-logo-slot--oracle {
+  width: 88px;
+  height: 16px;
+}
+
+.brand-divider {
+  width: 82px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+}
+
+.app-header-actions {
+  grid-column: 3;
+  justify-self: end;
+  gap: 14px;
+}
+
+.header-connection {
+  color: #758694;
+  font-family: var(--font-secondary);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.header-connection i {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: #57d59a;
+  box-shadow: 0 0 10px rgba(87, 213, 154, 0.7);
+}
+
+.theme-toggle,
+.header-menu-trigger {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  color: #f5f7f9;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.theme-toggle {
+  font-size: 18px;
+}
+
+.header-menu {
+  position: relative;
+  z-index: 2;
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+}
+
+.header-menu-trigger {
+  gap: 5px;
+  align-content: center;
+}
+
+.header-menu-trigger span {
+  width: 17px;
+  height: 1px;
+  background: currentColor;
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+
+.header-menu-trigger.is-open span:first-child { transform: translateY(6px) rotate(45deg); }
+.header-menu-trigger.is-open span:nth-child(2) { opacity: 0; }
+.header-menu-trigger.is-open span:last-child { transform: translateY(-6px) rotate(-45deg); }
+
+.header-menu-popover {
+  position: absolute;
+  top: 52px;
+  left: 0;
+  display: grid;
+  width: 250px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  background: rgba(5, 11, 17, 0.97);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(24px);
+}
+
+.header-menu-kicker,
+.header-menu-note {
+  padding: 10px 12px;
+  color: #6f8393;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.header-menu-popover button {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  color: #f5f7f9;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.header-menu-popover button:hover { background: rgba(42, 169, 224, 0.09); }
+.header-menu-popover .header-menu-exit { color: #ff7777; }
+.header-menu-rule { height: 1px; margin: 6px 10px; background: rgba(255, 255, 255, 0.09); }
+
+/* Login com nuvem SLAM animada */
+.login-layout { position: relative; overflow: hidden; background: #03070b; }
+.slam-background { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+.login-layout::after {
+  content: "";
+  position: fixed;
+  inset: var(--header-height) 0 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(3, 7, 11, 0.86) 0%, rgba(3, 7, 11, 0.34) 53%, rgba(3, 7, 11, 0.74) 100%),
+    linear-gradient(180deg, rgba(3, 7, 11, 0.12), #03070b 100%);
+}
+
+.login-page {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(360px, 0.75fr);
+  gap: clamp(50px, 8vw, 140px);
+  width: min(1380px, 100%);
+  min-height: calc(100vh - var(--header-height));
+  margin: 0 auto;
+  padding: clamp(40px, 7vw, 100px) clamp(24px, 5vw, 64px);
+}
+
+.login-intro { align-self: center; max-width: 760px; }
+.login-eyebrow,
+.login-header > span,
+.dashboard-title > span,
+.panel-eyebrow {
+  display: block;
+  margin-bottom: 18px;
+  color: #2aa9e0;
+  font-family: var(--font-secondary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+}
+
+.login-intro h1 {
+  max-width: 760px;
+  margin-bottom: 22px;
+  color: #f7f9fb;
+  font-size: clamp(46px, 6vw, 82px);
+  font-weight: 750;
+  letter-spacing: -0.055em;
+  line-height: 0.98;
+}
+
+.login-intro p {
+  max-width: 610px;
+  margin-bottom: 36px;
+  color: #9ba7b2;
+  font-size: clamp(16px, 1.5vw, 20px);
+  line-height: 1.65;
+}
+
+.login-signal { color: #788794; font-size: 9px; font-weight: 700; letter-spacing: 0.2em; }
+.login-signal span { display: inline-block; width: 28px; height: 1px; margin-right: 12px; vertical-align: middle; background: #ff1c26; box-shadow: 0 0 12px #ff1c26; }
+
+.login-card {
+  align-self: center;
+  max-width: 430px;
+  padding: clamp(30px, 4vw, 46px);
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(7, 13, 20, 0.76);
+  box-shadow: 0 34px 90px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(26px);
+}
+
+.login-header > span { margin-bottom: 12px; }
+.login-header h2 { margin: 0 0 10px; font-size: 28px; letter-spacing: -0.035em; }
+.login-header p { margin-bottom: 28px; color: #8999a6; font-size: 13px; }
+.login-form { gap: 18px; }
+.login-form label { color: #aab6c0; font-size: 12px; }
+.login-form input {
+  min-height: 52px;
+  padding: 0 18px;
+  border-color: rgba(255, 255, 255, 0.13);
+  border-radius: 16px;
+  background: rgba(2, 7, 11, 0.72);
+}
+.login-form input:focus { border-color: #2aa9e0; box-shadow: 0 0 0 3px rgba(42, 169, 224, 0.1); }
+.primary-button { min-height: 52px; border-radius: 16px; color: #fff; }
+.demo-button {
+  min-height: 48px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #dce3e8;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 700;
+}
+.demo-button span { margin-left: 10px; color: #ff2932; }
+
+/* Dashboard: uma superfície contínua, sem excesso de cards */
+.dashboard-page {
+  position: relative;
+  isolation: isolate;
+  padding: clamp(34px, 4vw, 64px);
+}
+.dashboard-page::before {
+  content: "";
+  position: fixed;
+  right: -8vw;
+  bottom: -17vw;
+  z-index: -1;
+  width: min(58vw, 860px);
+  aspect-ratio: 1;
+  opacity: 0.055;
+  background: url("../assets/images/icon.svg") center / contain no-repeat;
+  filter: grayscale(1) brightness(2);
+  pointer-events: none;
+}
+.dashboard-title { max-width: 780px; margin-bottom: 30px; }
+.dashboard-title > span { margin-bottom: 10px; }
+.dashboard-title h1 { margin-bottom: 9px; font-size: clamp(30px, 4vw, 50px); letter-spacing: -0.045em; }
+.dashboard-title p { color: #8a9aa7; font-size: 14px; }
+
+.status-grid--extended {
+  grid-template-columns: repeat(4, minmax(130px, 1fr));
+  width: min(100%, 820px);
+  margin: 0 0 26px auto;
+  gap: 0;
+  border-block: 1px solid rgba(255, 255, 255, 0.1);
+}
+.status-grid--extended .status-card {
+  min-height: 66px;
+  padding: 12px 20px;
+  border: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.status-grid--extended .status-card:last-child { border-right: 0; }
+.status-grid--extended .status-card span { color: #718492; font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; }
+.status-grid--extended .status-card strong { font-size: 15px; }
+
+.dashboard-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.07fr);
+  gap: 0;
+  padding: 18px;
+  border: 1px solid rgba(125, 153, 176, 0.18);
+  border-radius: 16px;
+  background: rgba(4, 10, 16, 0.44);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(12px);
+}
+.dashboard-grid > .panel {
+  padding: 18px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.dashboard-grid > .navigation-panel { border-left: 1px solid rgba(255, 255, 255, 0.1); }
+.panel-header { align-items: center; margin-bottom: 12px; }
+.panel-header h2 { margin: 0; font-size: 16px; }
+.panel-eyebrow { margin-bottom: 4px; color: #718492; font-size: 8px; }
+.panel-header p { display: none; }
+.status-label { padding: 6px 9px; color: #92a1ad; background: rgba(255, 255, 255, 0.06); font-size: 9px; letter-spacing: 0.08em; }
+.video-placeholder,
+.map-placeholder {
+  min-height: clamp(310px, 31vw, 480px);
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  background: #03090e;
+}
+.demo-camera-feed,
+.demo-map-feed {
+  width: 100%;
+  height: 100%;
+  min-height: inherit;
+  object-fit: cover;
+}
+.demo-camera-feed { filter: saturate(0.78) contrast(1.08) brightness(0.78); }
+.demo-map-feed { object-fit: contain; }
+.camera-resolution { border-radius: 8px; }
+.oracle-button { width: 100%; min-height: 46px; margin-top: 12px; }
+.map-location { display: none; }
+.map-actions { margin-top: 12px; }
+
+.teleoperation-panel {
+  margin-top: 28px;
+  padding: 24px 4px 4px;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0;
+  background: transparent;
+}
+.teleoperation-heading { margin-bottom: 14px; }
+.teleoperation-heading h2 { font-size: 22px; }
+.teleoperation-heading p { display: none; }
+.teleoperation-panel .native-safety-status { margin-bottom: 18px; }
+.teleoperation-grid { width: min(100%, 980px); gap: 0; }
+.teleoperation-card {
+  padding: 14px 28px;
+  border: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0;
+  background: transparent;
+}
+.teleoperation-card:last-child { border-right: 0; }
+.teleoperation-card__header small,
+.teleoperation-card > small { display: none; }
+.teleoperation-card__header::before { background: #ff2731; }
+.teleoperation-arm-button,
+.teleoperation-key,
+.teleoperation-speed__button { background: rgba(255, 255, 255, 0.045); }
+.teleoperation-footer { justify-content: flex-start; margin-top: 20px; border: 0; }
+.teleoperation-emergency { width: 220px; }
+
+@media (max-width: 900px) {
+  .login-page { grid-template-columns: 1fr; gap: 36px; }
+  .login-intro { align-self: end; }
+  .login-intro h1 { max-width: 650px; font-size: clamp(40px, 8vw, 64px); }
+  .login-card { justify-self: center; }
+  .dashboard-grid { grid-template-columns: 1fr; }
+  .dashboard-grid > .navigation-panel { border-top: 1px solid rgba(255, 255, 255, 0.1); border-left: 0; }
+  .teleoperation-grid { grid-template-columns: 1fr; }
+  .teleoperation-card { border-right: 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+  .teleoperation-card:last-child { border-bottom: 0; }
+}
+
+@media (max-width: 700px) {
+  :root { --header-height: 76px; }
+  .app-header-inner { grid-template-columns: 1fr auto 1fr; padding: 0 14px; }
+  .app-header-partners { grid-column: 2; grid-template-columns: 92px; gap: 2px; }
+  .partner-logo-slot { width: 92px; height: 22px; flex-basis: auto; }
+  .partner-logo-slot--oracle { display: flex !important; width: 66px; height: 12px; }
+  .brand-divider { display: block !important; width: 62px; height: 1px; }
+  .header-connection { display: none; }
+  .theme-toggle, .header-menu-trigger { width: 38px; height: 38px; }
+  .login-page { padding: 44px 20px; }
+  .login-intro p { font-size: 15px; }
+  .dashboard-page { padding: 28px 16px; }
+  .status-grid--extended { grid-template-columns: repeat(2, 1fr); width: 100%; }
+  .status-grid--extended .status-card:nth-child(2) { border-right: 0; }
+  .status-grid--extended .status-card:nth-child(-n+2) { border-bottom: 1px solid rgba(255, 255, 255, 0.09); }
+  .dashboard-grid { padding: 8px; }
+  .dashboard-grid > .panel { padding: 12px; }
+  .video-placeholder, .map-placeholder { min-height: 280px; }
+}
+
+@media (max-width: 480px) {
+  .app-header-actions { gap: 0; }
+  .login-intro h1 { font-size: 39px; }
+  .login-card { padding: 28px 22px; }
+  .dashboard-title h1 { font-size: 32px; }
+}
+
+/* =========================================================
+   25. REFINO DO DASHBOARD — VISOR ÚNICO / TEMA ORACLE
+   ========================================================= */
+
+:root[data-theme="light"] {
+  --color-background: #f4f7f9;
+  --color-surface: rgba(255, 255, 255, 0.82);
+  --color-surface-dark: rgba(248, 250, 252, 0.9);
+  --color-border: rgba(18, 37, 51, 0.14);
+  --color-border-light: rgba(18, 37, 51, 0.23);
+  --color-text: #101820;
+  --color-text-secondary: #536572;
+  --color-text-muted: #71818d;
+  --header-background: rgba(255, 255, 255, 0.9);
+  --header-border: rgba(16, 31, 42, 0.1);
+}
+
+:root[data-theme="dark"] {
+  --color-background: #050a10;
+  --color-surface: rgba(8, 15, 22, 0.84);
+  --color-surface-dark: rgba(4, 10, 16, 0.9);
+  --color-border: rgba(196, 214, 227, 0.16);
+  --color-border-light: rgba(196, 214, 227, 0.26);
+  --color-text: #f5f8fa;
+  --color-text-secondary: #98a8b4;
+  --color-text-muted: #778a98;
+  --header-background: rgba(3, 8, 12, 0.9);
+  --header-border: rgba(255, 255, 255, 0.1);
+}
+
+:root[data-theme="light"] body {
+  background:
+    radial-gradient(circle at 76% 38%, rgba(42, 169, 224, 0.08), transparent 34%),
+    linear-gradient(145deg, #ffffff 0%, #f4f7f9 62%, #e9f1f6 100%);
+}
+
+:root[data-theme="dark"] body {
+  background:
+    radial-gradient(circle at 76% 38%, rgba(42, 169, 224, 0.09), transparent 34%),
+    linear-gradient(145deg, #03070b 0%, #07121b 66%, #081d2e 100%);
+}
+
+.app-header,
+.app-header.app-header--scrolled {
+  border-bottom: 1px solid var(--header-border);
+  background: var(--header-background);
+  box-shadow: 0 8px 28px rgba(16, 34, 48, 0.04);
+}
+
+.app-header-partners {
+  grid-template-columns: 154px;
+  gap: 3px;
+}
+
+.partner-logo-slot {
+  width: 154px;
+  height: 34px;
+}
+
+.partner-logo-slot--oracle {
+  width: 82px;
+  height: 14px;
+}
+
+.brand-divider {
+  width: 96px;
+  background: linear-gradient(90deg, transparent, var(--header-border), transparent);
+}
+
+.app-header-logo {
+  filter: none;
+}
+
+:root[data-theme="dark"] .app-header-logo {
+  filter: brightness(0) invert(1);
+}
+
+.app-header-oracle-logo {
+  filter: none;
+}
+
+.header-menu-trigger,
+.theme-toggle {
+  border: 0;
+  color: #101820;
+  background: transparent;
+  box-shadow: none;
+}
+
+.header-menu-trigger:hover,
+.theme-toggle:hover {
+  background: rgba(16, 24, 32, 0.05);
+}
+
+:root[data-theme="dark"] .header-menu-trigger,
+:root[data-theme="dark"] .theme-toggle {
+  color: #ffffff;
+  background: transparent;
+}
+
+:root[data-theme="dark"] .header-menu-trigger:hover,
+:root[data-theme="dark"] .theme-toggle:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.header-connection {
+  color: #637581;
+}
+
+.header-menu-popover {
+  border-color: var(--color-border);
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-surface-dark) 94%, transparent);
+}
+
+.header-menu-popover button {
+  color: var(--color-text);
+}
+
+.dashboard-slam-background {
+  position: fixed;
+  inset: var(--header-height) 0 0;
+  z-index: 0;
+  opacity: 0.48;
+  filter: saturate(1.5) contrast(1.18);
+  mix-blend-mode: screen;
+}
+
+:root[data-theme="light"] .dashboard-slam-background {
+  opacity: 0.44;
+  filter: saturate(1.55) contrast(1.24);
+  mix-blend-mode: multiply;
+}
+
+.dashboard-page {
+  z-index: 1;
+  width: min(1640px, 100%);
+  padding: clamp(18px, 2.5vw, 34px);
+}
+
+.dashboard-page::before {
+  right: auto;
+  bottom: 2vh;
+  left: -10vw;
+  width: min(48vw, 720px);
+  opacity: 0.022;
+  background:
+    url("../../logos/iconexd4.svg") left bottom / 58% auto no-repeat,
+    url("../../logos/oraclefundo.png") 82% 78% / 48% auto no-repeat;
+  filter: grayscale(1);
+}
+
+:root[data-theme="dark"] .dashboard-page::before {
+  opacity: 0.045;
+  filter: grayscale(1) invert(1);
+}
+
+.dashboard-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  min-height: clamp(520px, calc(100vh - var(--header-height) - 68px), 760px);
+  margin: 0;
+  padding: 54px 0 42px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--color-surface) 68%, transparent);
+  box-shadow: 0 24px 70px rgba(22, 46, 64, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.operation-hud {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 54px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-family: var(--font-secondary);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.operation-hud > span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.operation-hud i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #2aa9e0;
+  box-shadow: 0 0 10px rgba(42, 169, 224, 0.5);
+}
+
+.operation-hud > div {
+  display: flex;
+  gap: 22px;
+}
+
+.operation-hud b {
+  color: var(--color-text-muted);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.operation-hud b.is-online::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: #47c88b;
+}
+
+.dashboard-grid > .panel {
+  position: relative;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.dashboard-grid > .navigation-panel {
+  border: 0;
+}
+
+.dashboard-grid .panel-header {
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  left: 22px;
+  z-index: 7;
+  margin: 0;
+  pointer-events: none;
+}
+
+.dashboard-grid .panel-header h2 {
+  color: #f8fafb;
+  font-size: 14px;
+}
+
+.dashboard-grid .panel-eyebrow {
+  color: rgba(225, 236, 243, 0.58);
+}
+
+.dashboard-grid .status-label {
+  color: rgba(255, 255, 255, 0.74);
+  background: rgba(3, 10, 15, 0.38);
+  backdrop-filter: blur(8px);
+}
+
+.video-placeholder,
+.map-placeholder {
+  width: 100%;
+  height: 100%;
+  min-height: 420px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background:
+    radial-gradient(circle at 50% 48%, rgba(42, 169, 224, 0.12), transparent 34%),
+    linear-gradient(150deg, #08131c, #02070b 74%);
+}
+
+.video-placeholder::before,
+.map-placeholder::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(42, 169, 224, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(42, 169, 224, 0.035) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: linear-gradient(to bottom, transparent, black 24%, black 80%, transparent);
+}
+
+.demo-empty-feed {
+  position: relative;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  color: rgba(220, 233, 241, 0.34);
+  font-family: var(--font-secondary);
+  letter-spacing: 0.16em;
+}
+
+.demo-empty-feed::before {
+  content: "";
+  width: 62px;
+  height: 1px;
+  margin-bottom: 10px;
+  background: linear-gradient(90deg, transparent, #2aa9e0, transparent);
+}
+
+.demo-empty-feed span { color: #2aa9e0; font-size: 9px; }
+.demo-empty-feed strong { font-size: 12px; font-weight: 600; }
+.demo-empty-feed small { font-size: 8px; }
+.demo-empty-feed--map::after {
+  content: "";
+  position: absolute;
+  width: 180px;
+  height: 100px;
+  border: 1px solid rgba(42, 169, 224, 0.1);
+  transform: perspective(280px) rotateX(62deg) rotateZ(-25deg);
+  background-image:
+    linear-gradient(rgba(42, 169, 224, 0.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(42, 169, 224, 0.09) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.camera-resolution {
+  right: auto;
+  bottom: 15px;
+  left: 18px;
+  z-index: 6;
+  color: rgba(255, 255, 255, 0.38);
+  background: transparent;
+  font-size: 8px;
+  letter-spacing: 0.12em;
+}
+
+.viewport-controls {
+  position: absolute;
+  right: 18px;
+  bottom: 14px;
+  z-index: 8;
+  display: flex;
+  gap: 8px;
+}
+
+.viewport-controls .oracle-button,
+.viewport-action {
+  width: auto;
+  min-width: 92px;
+  min-height: 36px;
+  margin: 0;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.82);
+  background: rgba(3, 9, 14, 0.66);
+  box-shadow: none;
+  backdrop-filter: blur(10px);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.viewport-controls .oracle-button::first-letter { text-transform: uppercase; }
+.viewport-action--primary {
+  border-color: rgba(42, 169, 224, 0.7);
+  color: #ffffff;
+  background: rgba(25, 145, 198, 0.82);
+}
+.viewport-controls button:not(:disabled):hover {
+  border-color: #2aa9e0;
+  color: #ffffff;
+  background: #168fc4;
+}
+
+.map-location,
+.map-actions,
+.demo-camera-feed,
+.demo-map-feed {
+  display: none;
+}
+
+.teleoperation-panel {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.55fr) minmax(0, 2fr) auto;
+  align-items: center;
+  gap: 26px;
+  margin-top: 18px;
+  padding: 20px 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-surface) 78%, transparent);
+  box-shadow: 0 18px 50px rgba(22, 46, 64, 0.06);
+  backdrop-filter: blur(12px);
+}
+
+.teleoperation-heading {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+}
+.teleoperation-heading h2 { margin: 0; color: var(--color-text); font-size: 18px; }
+.teleoperation-heading .status-label { justify-self: start; color: #1583b1; background: rgba(42, 169, 224, 0.1); }
+.teleoperation-panel .native-safety-status { display: none; }
+.teleoperation-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr 0.8fr;
+  width: 100%;
+  gap: 0;
+  margin: 0;
+}
+.teleoperation-card {
+  justify-content: center;
+  min-height: 154px;
+  padding: 8px 24px;
+  border: 0;
+  border-right: 1px solid var(--color-border);
+  background: transparent;
+}
+.teleoperation-card:last-child { border-right: 0; }
+.teleoperation-card__header::before { background: #2aa9e0; }
+.teleoperation-card__header strong { color: var(--color-text); }
+.teleoperation-arm-button,
+.teleoperation-key,
+.teleoperation-speed__button {
+  border-color: var(--color-border);
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-surface-dark) 76%, transparent);
+}
+.teleoperation-footer { margin: 0; padding: 0; border: 0; }
+.teleoperation-emergency { width: auto; min-width: 150px; min-height: 48px; border-radius: 12px; }
+.operation-message { grid-column: 1 / -1; margin: 0; }
+
+@media (max-width: 1100px) {
+  .teleoperation-panel { grid-template-columns: 1fr; }
+  .teleoperation-heading { display: flex; justify-content: space-between; }
+  .teleoperation-footer { justify-self: center; }
+}
+
+@media (max-width: 900px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+  .dashboard-grid > .panel { min-height: 430px; }
+  .dashboard-grid > .navigation-panel { border-top: 1px solid rgba(255, 255, 255, 0.08); }
+  .teleoperation-grid { grid-template-columns: 1fr; }
+  .teleoperation-card { border-right: 0; border-bottom: 1px solid var(--color-border); }
+}
+
+@media (max-width: 700px) {
+  .app-header-partners { grid-template-columns: 108px; }
+  .partner-logo-slot { width: 108px; height: 25px; }
+  .partner-logo-slot--oracle { width: 62px; height: 11px; }
+  .dashboard-page { padding: 12px; }
+  .dashboard-grid { padding-top: 48px; }
+  .operation-hud { height: 48px; padding: 0 12px; }
+  .operation-hud > div b:first-child { display: none; }
+  .dashboard-grid > .panel { min-height: 360px; }
+  .video-placeholder, .map-placeholder { min-height: 360px; }
+  .dashboard-grid .panel-header { top: 14px; right: 14px; left: 14px; }
+  .viewport-controls { right: 12px; bottom: 12px; }
+  .viewport-controls .oracle-button, .viewport-action { min-width: 76px; padding: 0 10px; font-size: 8px; }
+  .camera-resolution { display: none; }
+  .teleoperation-panel { padding: 18px 14px; }
+}
+
+/* Visor principal fiel à referência XD4: uma moldura, conteúdo interno. */
+.dashboard-grid {
+  min-height: clamp(540px, calc(100vh - var(--header-height) - 64px), 760px);
+  padding: 52px 0 46px;
+  border: 1px solid rgba(164, 109, 20, 0.48);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 50% 52%, rgba(27, 82, 112, 0.16), transparent 46%),
+    linear-gradient(155deg, rgba(3, 8, 12, 0.64), rgba(3, 9, 14, 0.52));
+  box-shadow: none;
+}
+
+.operation-hud {
+  height: 52px;
+  padding: 0 20px;
+  border-bottom: 0;
+  color: rgba(224, 229, 233, 0.46);
+}
+
+.operation-hud > span {
+  min-height: 34px;
+  padding: 0 16px;
+  border: 1px solid rgba(164, 109, 20, 0.42);
+  border-radius: 999px;
+  color: rgba(239, 242, 244, 0.72);
+}
+
+.operation-hud i {
+  background: #a66b16;
+  box-shadow: 0 0 9px rgba(166, 107, 22, 0.32);
+}
+
+.operation-hud > b {
+  color: rgba(224, 229, 233, 0.34);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+}
+
+.dashboard-grid > .panel {
+  overflow: hidden;
+}
+
+.video-placeholder,
+.map-placeholder {
+  min-height: 440px;
+  background: transparent;
+}
+
+.video-placeholder::before,
+.map-placeholder::before {
+  opacity: 0.26;
+  background-size: 56px 56px;
+}
+
+.demo-empty-feed {
+  color: rgba(235, 239, 242, 0.22);
+}
+
+.demo-empty-feed::before {
+  width: 42px;
+  background: linear-gradient(90deg, transparent, rgba(188, 122, 25, 0.7), transparent);
+}
+
+.demo-empty-feed strong {
+  color: rgba(235, 239, 242, 0.3);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+}
+
+.demo-empty-feed--map::after {
+  border-color: rgba(188, 122, 25, 0.1);
+  background-image:
+    linear-gradient(rgba(188, 122, 25, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(188, 122, 25, 0.08) 1px, transparent 1px);
+}
+
+.viewport-controls {
+  bottom: 16px;
+}
+
+.viewport-controls .oracle-button,
+.viewport-action {
+  border-color: rgba(188, 122, 25, 0.32);
+  border-radius: 10px;
+  background: rgba(3, 7, 10, 0.74);
+}
+
+.viewport-action--primary {
+  border-color: rgba(42, 169, 224, 0.62);
+  background: rgba(18, 123, 170, 0.78);
+}
+
+.operation-mission {
+  position: absolute;
+  bottom: 62px;
+  left: 18px;
+  z-index: 9;
+  display: grid;
+  gap: 7px;
+  min-width: 210px;
+  padding: 14px 16px;
+  border: 1px solid rgba(164, 109, 20, 0.38);
+  border-radius: 12px;
+  color: #f4f6f7;
+  background: rgba(3, 7, 10, 0.7);
+  backdrop-filter: blur(10px);
+}
+
+.operation-mission span {
+  color: #ad741f;
+  font-family: var(--font-secondary);
+  font-size: 8px;
+  letter-spacing: 0.18em;
+}
+
+.operation-mission strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.operation-footer-strip {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: clamp(18px, 3vw, 42px);
+  height: 46px;
+  padding: 0 20px;
+  border-top: 1px solid rgba(164, 109, 20, 0.32);
+  color: rgba(220, 226, 231, 0.34);
+  background: rgba(3, 7, 10, 0.62);
+  font-family: var(--font-secondary);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  backdrop-filter: blur(8px);
+}
+
+@media (max-width: 900px) {
+  .dashboard-grid { min-height: auto; }
+  .operation-mission { bottom: 62px; }
+}
+
+@media (max-width: 700px) {
+  .dashboard-grid { padding-top: 48px; padding-bottom: 42px; }
+  .operation-hud { height: 48px; padding: 0 10px; }
+  .operation-hud > span { min-height: 30px; padding: 0 10px; font-size: 7px; }
+  .operation-hud > b { display: none; }
+  .operation-mission { left: 12px; min-width: 170px; padding: 11px 12px; }
+  .operation-footer-strip { gap: 14px; height: 42px; padding: 0 12px; overflow: hidden; }
+  .operation-footer-strip span:nth-child(3),
+  .operation-footer-strip span:nth-child(4) { display: none; }
+}
+
+/* =========================================================
+   26. HEADER HORIZONTAL, LOGIN LIMPO E CENTRAL DE COMANDOS
+   ========================================================= */
+
+.app-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 18px;
+}
+
+.app-header-partners {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 14px;
+  margin: 0;
+}
+
+.partner-logo-slot {
+  width: 178px;
+  height: 40px;
+}
+
+.partner-logo-slot--oracle {
+  width: 105px;
+  height: 24px;
+}
+
+.brand-divider {
+  width: 1px;
+  height: 30px;
+  background: var(--header-border);
+}
+
+.app-header-brand:hover .app-header-logo,
+.app-header-brand:active .app-header-logo {
+  transform: none;
+}
+
+.app-header-actions {
+  margin-left: auto;
+}
+
+.app-header--login .app-header-inner {
+  justify-content: flex-start;
+}
+
+.app-header--login .app-header-partners {
+  margin: 0;
+}
+
+.header-menu-popover {
+  position: fixed;
+  top: var(--header-height);
+  bottom: 0;
+  left: 0;
+  width: min(380px, 88vw);
+  padding: 28px 18px;
+  border-width: 0 1px 0 0;
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 18px 0 50px rgba(20, 38, 52, 0.08);
+  backdrop-filter: blur(20px);
+}
+
+:root[data-theme="dark"] .header-menu-popover {
+  background: rgba(5, 10, 15, 0.98);
+}
+
+.header-menu-kicker {
+  margin-bottom: 14px;
+  padding: 0 12px;
+  color: var(--color-text-muted);
+}
+
+.header-menu-popover button {
+  min-height: 54px;
+  padding: 0 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.header-menu-popover button::after {
+  content: "›";
+  float: right;
+  font-size: 20px;
+}
+
+.header-menu-popover .header-menu-exit::after {
+  content: "";
+}
+
+.header-menu-popover button:hover {
+  color: #101820;
+  background: rgba(42, 169, 224, 0.12);
+}
+
+:root[data-theme="dark"] .header-menu-popover button:hover {
+  color: #ffffff;
+}
+
+/* Login branco: somente co-branding, mapa e autenticação. */
+.login-layout {
+  background: #ffffff;
+}
+
+.login-layout::after {
+  inset: var(--header-height) 0 0;
+  background:
+    radial-gradient(circle at 50% 48%, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.2) 76%, rgba(255, 255, 255, 0.72) 100%);
+}
+
+.login-slam-background {
+  opacity: 0.58;
+  filter: saturate(1.18) contrast(1.08);
+}
+
+.login-page {
+  display: grid;
+  grid-template-columns: minmax(280px, 420px);
+  place-content: center;
+  width: 100%;
+  min-height: calc(100vh - var(--header-height));
+  padding: 30px 20px;
+}
+
+.login-card,
+:root[data-theme="light"] .login-card,
+:root[data-theme="dark"] .login-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 40px;
+  border: 1px solid rgba(18, 38, 52, 0.12);
+  border-radius: 18px;
+  color: #101820;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 24px 70px rgba(27, 49, 64, 0.13);
+  backdrop-filter: blur(18px);
+}
+
+.login-header h2 {
+  margin: 0 0 8px;
+  color: #101820;
+  font-size: 29px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+}
+
+.login-header p {
+  margin-bottom: 28px;
+  color: #647681;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.login-form label {
+  color: #344955;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.login-form input,
+:root[data-theme="light"] .login-form input,
+:root[data-theme="dark"] .login-form input {
+  min-height: 52px;
+  border: 1px solid rgba(18, 38, 52, 0.16);
+  color: #101820;
+  background: rgba(248, 250, 251, 0.94);
+}
+
+.login-form input:focus {
+  border-color: #2aa9e0;
+  box-shadow: 0 0 0 4px rgba(42, 169, 224, 0.1);
+}
+
+.login-form .primary-button {
+  border: 1px solid #2aa9e0;
+  color: #ffffff;
+  background: #2aa9e0;
+  box-shadow: none;
+}
+
+.login-form .demo-button {
+  border-color: rgba(18, 38, 52, 0.14);
+  color: #51636e;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* Visor: sem laranja, botões transparentes e sem faixa inferior. */
+.dashboard-grid {
+  padding-bottom: 0;
+  border-color: rgba(42, 169, 224, 0.18);
+}
+
+.operation-hud > span {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.operation-hud i {
+  background: #2aa9e0;
+  box-shadow: 0 0 9px rgba(42, 169, 224, 0.28);
+}
+
+.operation-footer-strip,
+.operation-mission {
+  display: none;
+}
+
+.viewport-controls .oracle-button,
+.viewport-action,
+.dashboard-grid > .oracle-button {
+  min-height: 38px;
+  padding: 0 16px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.86);
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: blur(8px);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.dashboard-grid > .oracle-button {
+  position: absolute;
+  bottom: 16px;
+  left: 18px;
+  z-index: 12;
+  width: auto;
+  margin: 0;
+}
+
+.viewport-action--primary {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: transparent;
+}
+
+.viewport-controls button:not(:disabled):hover,
+.dashboard-grid > .oracle-button:not(:disabled):hover {
+  border-color: #2aa9e0;
+  color: #ffffff;
+  background: rgba(42, 169, 224, 0.12);
+  box-shadow: none;
+}
+
+/* Central de comandos: uma superfície única e leitura por função. */
+.teleoperation-panel {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr) auto;
+  gap: 24px;
+  padding: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: var(--color-surface);
+}
+
+.teleoperation-heading h2 {
+  font-size: 20px;
+}
+
+.teleoperation-grid {
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-surface-dark) 78%, transparent);
+}
+
+.teleoperation-card {
+  min-height: 178px;
+  padding: 18px 24px;
+  border-right: 1px solid var(--color-border);
+  border-bottom: 0;
+}
+
+.teleoperation-card__header {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.teleoperation-card__header::before {
+  display: none;
+}
+
+.teleoperation-card__header strong {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.teleoperation-arm-button {
+  min-height: 54px;
+  border-radius: 12px;
+}
+
+.teleoperation-key,
+.teleoperation-speed__button {
+  border-radius: 12px;
+}
+
+.teleoperation-emergency {
+  min-width: 174px;
+  min-height: 52px;
+  border-radius: 12px;
+}
+
+@media (max-width: 1100px) {
+  .teleoperation-panel { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 900px) {
+  .teleoperation-card { border-right: 0; border-bottom: 1px solid var(--color-border); }
+}
+
+@media (max-width: 700px) {
+  .app-header-inner { gap: 9px; padding: 0 14px; }
+  .app-header-partners { gap: 8px; }
+  .partner-logo-slot { width: 112px; height: 28px; }
+  .partner-logo-slot--oracle { width: 72px; height: 17px; }
+  .brand-divider { height: 22px; }
+  .login-page { padding: 20px 14px; }
+  .login-card { padding: 30px 24px; }
+  .dashboard-grid > .oracle-button { bottom: 12px; left: 12px; }
+}
+
+/* =========================================================
+   27. CORREÇÕES DE INTERAÇÃO, STATUS E ESTADOS VAZIOS
+   ========================================================= */
+
+.app-header-brand,
+.app-header-brand:hover,
+.app-header-brand:active,
+.app-header-brand:not(:disabled):hover,
+.app-header-brand:not(:disabled):active {
+  transform: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.app-header-brand .app-header-logo,
+.app-header-brand:hover .app-header-logo,
+.app-header-brand:active .app-header-logo {
+  transform: none !important;
+  opacity: 1 !important;
+}
+
+.header-menu-popover {
+  position: absolute;
+  top: 54px;
+  bottom: auto;
+  left: 0;
+  z-index: 2200;
+  width: min(320px, calc(100vw - 28px));
+  max-height: calc(100vh - var(--header-height) - 20px);
+  padding: 18px 14px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  box-shadow: 0 22px 60px rgba(20, 38, 52, 0.16);
+}
+
+.login-slam-background {
+  opacity: 0.7;
+  filter: saturate(1.24) contrast(1.12);
+}
+
+:root[data-theme="dark"] .login-layout {
+  background: #03070a;
+}
+
+:root[data-theme="dark"] .login-layout::after {
+  background:
+    radial-gradient(circle at 50% 48%, transparent, rgba(3, 7, 10, 0.2) 76%, rgba(3, 7, 10, 0.72) 100%);
+}
+
+:root[data-theme="dark"] .login-card {
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #f7f9fa;
+  background: rgba(4, 9, 13, 0.9);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.36);
+}
+
+:root[data-theme="dark"] .login-header h2 {
+  color: #f7f9fa;
+}
+
+:root[data-theme="dark"] .login-header p,
+:root[data-theme="dark"] .login-form label {
+  color: #9cacb7;
+}
+
+:root[data-theme="dark"] .login-form input {
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.56);
+}
+
+:root[data-theme="dark"] .login-form .demo-button {
+  border-color: rgba(255, 255, 255, 0.16);
+  color: #c4d0d8;
+  background: transparent;
+}
+
+.dashboard-page > .status-grid--extended {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(135px, 190px));
+  justify-content: center;
+  width: 100%;
+  margin: 0 0 14px;
+  border: 0;
+}
+
+.dashboard-page > .status-grid--extended .status-card {
+  min-height: 62px;
+  padding: 11px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-surface) 74%, transparent);
+  box-shadow: none;
+  backdrop-filter: blur(10px);
+}
+
+.dashboard-page > .status-grid--extended .status-card span {
+  color: var(--color-text-muted);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+.dashboard-page > .status-grid--extended .status-card strong {
+  font-size: 15px;
+}
+
+.video-placeholder,
+.map-placeholder {
+  background: transparent !important;
+}
+
+.video-placeholder::before,
+.map-placeholder::before,
+.demo-empty-feed::before,
+.demo-empty-feed--map::after {
+  display: none !important;
+}
+
+.demo-empty-feed {
+  color: rgba(230, 237, 242, 0.58);
+}
+
+.demo-empty-feed strong {
+  color: inherit;
+  font-family: var(--font-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.viewport-controls .oracle-button,
+.viewport-action,
+.dashboard-grid > .oracle-button,
+.viewport-action--primary {
+  color: rgba(255, 255, 255, 0.88) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.viewport-controls button:not(:disabled):hover,
+.dashboard-grid > .oracle-button:not(:disabled):hover {
+  border-color: rgba(255, 255, 255, 0.7);
+  color: #ffffff !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.dashboard-grid > .oracle-button {
+  min-width: 210px;
+  min-height: 48px;
+  padding: 0 24px;
+  border-width: 1px;
+  border-color: rgba(255, 255, 255, 0.48);
+  border-radius: 12px;
+  font-size: 11px;
+}
+
+@media (max-width: 700px) {
+  .dashboard-page > .status-grid--extended {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .dashboard-grid > .oracle-button { min-width: 168px; min-height: 42px; }
+}
+
+/* =========================================================
+   28. STATUS INTEGRADOS AO VISOR E INTERAÇÃO UNIFICADA
+   ========================================================= */
+
+.dashboard-grid {
+  min-height: clamp(570px, calc(100vh - var(--header-height) - 48px), 790px);
+  padding-top: 68px;
+}
+
+.operation-hud {
+  height: 68px;
+  gap: 18px;
+  padding: 0 18px;
+}
+
+.operation-statuses {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.operation-statuses > span {
+  display: flex;
+  flex: 0 0 178px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 178px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  color: rgba(239, 242, 244, 0.7);
+  font-family: var(--font-secondary);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+.operation-statuses i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #2aa9e0;
+  box-shadow: 0 0 9px rgba(42, 169, 224, 0.34);
+}
+
+.operation-statuses strong {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: inherit;
+}
+
+.operation-statuses strong.is-online {
+  color: #66d69e;
+}
+
+.operation-statuses strong.is-offline {
+  color: #ff8383;
+}
+
+.operation-hud > b {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.viewport-controls .oracle-button,
+.viewport-action,
+.dashboard-grid > .oracle-button,
+.teleoperation-arm-button,
+.teleoperation-posture button,
+.teleoperation-key,
+.teleoperation-speed__button {
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.viewport-controls button:not(:disabled):hover,
+.dashboard-grid > .oracle-button:not(:disabled):hover,
+.teleoperation-arm-button:not(:disabled):hover,
+.teleoperation-posture button:not(:disabled):hover,
+.teleoperation-key:not(:disabled):hover,
+.teleoperation-speed__button:not(:disabled):hover {
+  border-color: #2aa9e0 !important;
+  color: #ffffff !important;
+  background: rgba(42, 169, 224, 0.14) !important;
+  box-shadow: 0 8px 22px rgba(20, 126, 174, 0.14) !important;
+  transform: translateY(-2px);
+}
+
+.viewport-controls button:not(:disabled):active,
+.dashboard-grid > .oracle-button:not(:disabled):active,
+.teleoperation-arm-button:not(:disabled):active,
+.teleoperation-posture button:not(:disabled):active,
+.teleoperation-key:not(:disabled):active,
+.teleoperation-speed__button:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+.viewport-controls button:focus-visible,
+.dashboard-grid > .oracle-button:focus-visible,
+.teleoperation-arm-button:focus-visible,
+.teleoperation-posture button:focus-visible,
+.teleoperation-key:focus-visible,
+.teleoperation-speed__button:focus-visible {
+  outline: 2px solid rgba(42, 169, 224, 0.72);
+  outline-offset: 3px;
+}
+
+.dashboard-grid > .oracle-button {
+  min-width: 232px;
+  min-height: 52px;
+  font-size: 12px;
+}
+
+.viewport-action {
+  min-width: 108px;
+  min-height: 42px;
+}
+
+@media (max-width: 1280px) {
+  .operation-statuses {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .operation-statuses::-webkit-scrollbar { display: none; }
+  .operation-hud > b { display: none; }
+}
+
+@media (max-width: 700px) {
+  .dashboard-grid { padding-top: 60px; }
+  .operation-hud { height: 60px; padding: 0 10px; }
+  .operation-statuses > span {
+    flex-basis: 154px;
+    width: 154px;
+    min-height: 34px;
+    font-size: 7px;
+  }
+  .dashboard-grid > .oracle-button {
+    min-width: 190px;
+    min-height: 46px;
+  }
+}
+
+/* Regra final: títulos e colunas da central rigorosamente alinhados. */
+.teleoperation-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.teleoperation-card__header,
+.teleoperation-card__header > div {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 24px;
+  text-align: center;
+}
+
+.teleoperation-card__header strong {
+  width: 100%;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .teleoperation-grid { grid-template-columns: 1fr; }
+}
+
+/* Cabeçalhos na mesma coordenada vertical, independente dos controles abaixo. */
+.teleoperation-card,
+.teleoperation-card--system,
+.teleoperation-card--direction,
+.teleoperation-card--response {
+  justify-content: flex-start !important;
+  padding-top: 18px;
+}
+
+.teleoperation-card__header {
+  flex: 0 0 24px;
+  height: 24px;
+  min-height: 24px;
+  margin: 0 0 12px;
+  line-height: 24px;
+}
+
+.teleoperation-card__header > div {
+  height: 24px;
+  min-height: 24px;
+}
+
+.teleoperation-card__header strong {
+  display: block;
+  height: 24px;
+  line-height: 24px;
+  white-space: nowrap;
+}
+
+.teleoperation-card--response .teleoperation-speed {
+  margin-top: 14px;
+}
+
+/* Tema claro do dashboard com contraste próprio e sem moldura preta. */
+:root[data-theme="light"] .dashboard-grid {
+  border-color: rgba(31, 65, 87, 0.14);
+  background:
+    radial-gradient(circle at 52% 48%, rgba(42, 169, 224, 0.07), transparent 44%),
+    rgba(255, 255, 255, 0.5);
+  box-shadow: 0 20px 60px rgba(31, 65, 87, 0.08);
+}
+
+:root[data-theme="light"] .operation-hud {
+  border-bottom: 1px solid rgba(31, 65, 87, 0.08);
+  background: rgba(255, 255, 255, 0.46);
+}
+
+:root[data-theme="light"] .operation-statuses > span {
+  border-color: rgba(31, 65, 87, 0.18);
+  color: #425866;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+:root[data-theme="light"] .operation-statuses strong {
+  color: #182a35;
+}
+
+:root[data-theme="light"] .operation-statuses strong.is-online {
+  color: #168355;
+}
+
+:root[data-theme="light"] .operation-statuses strong.is-offline {
+  color: #b4232d;
+}
+
+:root[data-theme="light"] .operation-hud > b {
+  color: #71828d;
+}
+
+:root[data-theme="light"] .video-placeholder,
+:root[data-theme="light"] .map-placeholder {
+  color: #536875;
+  background: transparent !important;
+}
+
+:root[data-theme="light"] .demo-empty-feed,
+:root[data-theme="light"] .demo-empty-feed strong {
+  color: #6d7f8a;
+}
+
+:root[data-theme="light"] .viewport-controls .oracle-button,
+:root[data-theme="light"] .viewport-action,
+:root[data-theme="light"] .dashboard-grid > .oracle-button,
+:root[data-theme="light"] .viewport-action--primary {
+  border-color: rgba(31, 65, 87, 0.38);
+  color: #203642 !important;
+  background: rgba(255, 255, 255, 0.24) !important;
+}
+
+:root[data-theme="light"] .viewport-controls button:not(:disabled):hover,
+:root[data-theme="light"] .dashboard-grid > .oracle-button:not(:disabled):hover {
+  border-color: #2aa9e0 !important;
+  color: #0c6f9a !important;
+  background: rgba(42, 169, 224, 0.12) !important;
+}
+
+:root[data-theme="light"] .teleoperation-panel,
+:root[data-theme="light"] .teleoperation-grid {
+  color: #172a35;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+:root[data-theme="light"] .teleoperation-card__header strong,
+:root[data-theme="light"] .teleoperation-heading h2 {
+  color: #172a35;
+}
+
+@media (max-width: 700px) {
+  .app-header-inner {
+    position: relative;
+    justify-content: space-between;
+  }
+
+  .app-header-partners,
+  .app-header--login .app-header-partners {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    margin: 0;
+    transform: translate(-50%, -50%);
+  }
+
+  .app-header-actions {
+    margin-left: auto;
+  }
+}
+
+/* Regra final mobile: cada controle permanece sobre o seu visor. */
+.viewport-controls--camera {
+  right: auto;
+  left: 18px;
+}
+
+.viewport-controls--camera .oracle-button {
+  width: 232px;
+  min-width: 0;
+  min-height: 52px;
+  margin: 0;
+  font-size: 12px;
+}
+
+@media (max-width: 700px) {
+  .dashboard-grid > .panel,
+  .video-placeholder,
+  .map-placeholder {
+    min-height: min(390px, 64vh);
+  }
+
+  .viewport-controls--camera,
+  .viewport-controls--map {
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    justify-content: center;
+  }
+
+  .viewport-controls--camera .oracle-button {
+    width: min(100%, 220px);
+    min-height: 44px;
+    padding: 0 16px;
+    border-radius: 10px;
+    font-size: 10px;
+  }
+
+  .viewport-controls--map .viewport-action {
+    flex: 1 1 0;
+    width: auto;
+    max-width: 150px;
+    min-width: 0;
+    min-height: 40px;
+    padding: 0 10px;
+    font-size: 8px;
+  }
+
+  .demo-empty-feed strong {
+    padding: 0 16px;
+    font-size: 11px;
+    text-align: center;
+  }
+}
+
+@media (max-width: 380px) {
+  .dashboard-grid > .panel,
+  .video-placeholder,
+  .map-placeholder {
+    min-height: 330px;
+  }
+
+  .viewport-controls--camera .oracle-button {
+    width: min(100%, 190px);
+    min-height: 42px;
   }
 }

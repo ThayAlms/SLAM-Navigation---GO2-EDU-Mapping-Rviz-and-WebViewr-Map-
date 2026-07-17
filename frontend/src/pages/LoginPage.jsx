@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 
 import AppHeader from "../components/AppHeader";
+import SlamBackground from "../components/SlamBackground";
 import { useAuth } from "../context/useAuth";
 
 function LoginPage() {
@@ -45,14 +46,15 @@ function LoginPage() {
   }
 
   return (
-    <div className="app-layout">
+    <div className="app-layout login-layout">
       <AppHeader />
+      <SlamBackground className="login-slam-background" variant="login" />
 
       <main className="login-page">
-        <section className="login-card">
+        <section className="login-card" aria-label="Acesso do operador">
           <div className="login-header">
-            <h1>Operação remota</h1>
-            <p>Entre com o acesso fornecido pelo administrador.</p>
+            <h2>Acessar plataforma</h2>
+            <p>Informe suas credenciais para continuar.</p>
           </div>
 
           <form className="login-form" onSubmit={handleSubmit}>

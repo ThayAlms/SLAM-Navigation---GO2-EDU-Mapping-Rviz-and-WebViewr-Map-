@@ -2,14 +2,12 @@ import { useLayoutEffect, useMemo, useState } from "react";
 
 import { ThemeContext } from "./theme-context";
 
-const STORAGE_KEY = "xd4-go2-theme";
+const STORAGE_KEY = "xd4-go2-theme-v2";
 
 function initialTheme() {
   const saved = window.localStorage.getItem(STORAGE_KEY);
   if (saved === "light" || saved === "dark") return saved;
-  return window.matchMedia?.("(prefers-color-scheme: light)").matches
-    ? "light"
-    : "dark";
+  return "light";
 }
 
 export function ThemeProvider({ children }) {
