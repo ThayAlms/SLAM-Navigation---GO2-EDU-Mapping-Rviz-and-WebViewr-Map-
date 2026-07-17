@@ -210,6 +210,30 @@ class RobotGatewayHandler(BaseHTTPRequestHandler):
                     body.get("percent")
                 )
                 self._json({"ok": True, "speed_percent": percent})
+            elif path == "/api/control/obstacle-avoidance":
+                enabled = body.get("enabled")
+                if not isinstance(enabled, bool):
+                    raise ValueError(
+                        "o campo enabled do anticolisão deve ser booleano"
+                    )
+                requested = self.runtime.node.set_obstacle_avoidance(
+                    enabled
+                )
+                self._json(
+                    {
+                        "ok": True,
+                        "obstacle_avoidance_requested": requested,
+                    }
+                )
+            elif path == "/api/control/damping":
+                armed = self.runtime.node.damping()
+                self._json(
+                    {
+                        "ok": True,
+                        "command": "damping",
+                        "armed": armed,
+                    }
+                )
             elif path == "/api/control/stop":
                 self.runtime.node.arm_control(False)
                 self.runtime.node.stop_motion()

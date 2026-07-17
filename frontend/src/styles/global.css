@@ -1948,6 +1948,20 @@ button:focus-visible {
   color: #ffbd66;
 }
 
+.native-safety-status--unprotected {
+  border-color: rgba(255, 174, 66, 0.48);
+  background: rgba(255, 174, 66, 0.1);
+}
+
+.native-safety-status--unprotected > span {
+  background: #ffae42;
+  box-shadow: 0 0 0 3px rgba(255, 174, 66, 0.13);
+}
+
+.native-safety-status--unprotected small {
+  color: #ffbd66;
+}
+
 .control-panel--wide {
   padding: clamp(14px, 2vw, 20px);
 }
@@ -2629,7 +2643,8 @@ button:focus-visible {
 
 .teleoperation-card__header small,
 .teleoperation-card > small,
-.teleoperation-arm-button small {
+.teleoperation-arm-button small,
+.teleoperation-avoidance-button small {
   color: var(--color-text-muted);
   font-family: var(--font-secondary);
   font-size: 10px;
@@ -2656,6 +2671,33 @@ button:focus-visible {
   border-color: #58d39b;
   background: rgba(88, 211, 155, 0.08);
   box-shadow: 0 0 0 3px rgba(88, 211, 155, 0.07);
+}
+
+.teleoperation-avoidance-button {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  min-height: 54px;
+  padding: 9px 12px;
+  color: var(--color-text);
+  background: #22252c;
+  text-align: left;
+}
+
+.teleoperation-avoidance-button strong {
+  font-size: 13px;
+}
+
+.teleoperation-avoidance-button.is-enabled {
+  border-color: #58d39b;
+  background: rgba(88, 211, 155, 0.08);
+  box-shadow: 0 0 0 3px rgba(88, 211, 155, 0.07);
+}
+
+.teleoperation-avoidance-button.is-disabled {
+  border-color: rgba(255, 174, 66, 0.58);
+  background: rgba(255, 174, 66, 0.08);
+  box-shadow: 0 0 0 3px rgba(255, 174, 66, 0.06);
 }
 
 .teleoperation-posture {
@@ -4629,7 +4671,8 @@ input,
   font-weight: 700;
 }
 
-.teleoperation-arm-button {
+.teleoperation-arm-button,
+.teleoperation-avoidance-button {
   min-height: 54px;
   border-radius: 12px;
 }
@@ -4905,6 +4948,7 @@ input,
 .viewport-action,
 .dashboard-grid > .oracle-button,
 .teleoperation-arm-button,
+.teleoperation-avoidance-button,
 .teleoperation-posture button,
 .teleoperation-key,
 .teleoperation-speed__button {
@@ -4919,6 +4963,7 @@ input,
 .viewport-controls button:not(:disabled):hover,
 .dashboard-grid > .oracle-button:not(:disabled):hover,
 .teleoperation-arm-button:not(:disabled):hover,
+.teleoperation-avoidance-button:not(:disabled):hover,
 .teleoperation-posture button:not(:disabled):hover,
 .teleoperation-key:not(:disabled):hover,
 .teleoperation-speed__button:not(:disabled):hover {
@@ -4932,6 +4977,7 @@ input,
 .viewport-controls button:not(:disabled):active,
 .dashboard-grid > .oracle-button:not(:disabled):active,
 .teleoperation-arm-button:not(:disabled):active,
+.teleoperation-avoidance-button:not(:disabled):active,
 .teleoperation-posture button:not(:disabled):active,
 .teleoperation-key:not(:disabled):active,
 .teleoperation-speed__button:not(:disabled):active {
@@ -4941,6 +4987,7 @@ input,
 .viewport-controls button:focus-visible,
 .dashboard-grid > .oracle-button:focus-visible,
 .teleoperation-arm-button:focus-visible,
+.teleoperation-avoidance-button:focus-visible,
 .teleoperation-posture button:focus-visible,
 .teleoperation-key:focus-visible,
 .teleoperation-speed__button:focus-visible {

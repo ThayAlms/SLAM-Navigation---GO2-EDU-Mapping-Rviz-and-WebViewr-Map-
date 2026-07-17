@@ -26,6 +26,8 @@ ALLOWED_COMMANDS = {
     "arm",
     "disarm",
     "set_speed",
+    "set_obstacle_avoidance",
+    "damping",
     "reset_map",
     "save_map",
     "stop",
@@ -88,9 +90,16 @@ def gateway_action(command, payload):
         return "/api/control/arm", {"armed": command == "arm"}
     if command == "set_speed":
         percent = int(payload.get("percent", 0))
-        if not 5 <= percent <= 100:
-            raise ValueError("velocidade fora da faixa de 5% a 100%")
+        if not 10 <= percent <= 100:
+            raise ValueError("velocidade fora da faixa de 10% a 100%")
         return "/api/control/speed", {"percent": percent}
+    if command == "set_obstacle_avoidance":
+        enabled = payload.get("enabled")
+        if not isinstance(enabled, bool):
+            raise ValueError("estado do anticolisão deve ser booleano")
+        return "/api/control/obstacle-avoidance", {"enabled": enabled}
+    if command == "damping":
+        return "/api/control/damping", {}
     if command == "reset_map":
         return "/api/map/reset", {}
     if command == "save_map":

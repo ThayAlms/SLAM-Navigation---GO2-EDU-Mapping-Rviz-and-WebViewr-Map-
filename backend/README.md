@@ -93,8 +93,9 @@ Resultados de comandos e análises usam o mesmo formato:
 
 Os status aceitos no retorno são `processing`, `completed` e `failed`. Os
 comandos do painel são `forward`, `backward`, `rotate_left`, `rotate_right`,
-`stand_up`, `stand_down`, `arm`, `disarm`, `set_speed`, `reset_map`, `save_map`,
-`stop` e `emergency_stop`.
+`stand_up`, `stand_down`, `arm`, `disarm`, `set_speed`,
+`set_obstacle_avoidance`, `damping`, `reset_map`, `save_map`, `stop` e
+`emergency_stop`.
 
 ## Testes
 

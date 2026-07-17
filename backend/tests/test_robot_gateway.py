@@ -30,12 +30,16 @@ async def test_commands_are_mapped_to_gateway_routes(monkeypatch) -> None:
     await gateway.execute("forward")
     await gateway.execute("stand_up")
     await gateway.execute("set_speed", {"percent": 35})
+    await gateway.execute("set_obstacle_avoidance", {"enabled": False})
+    await gateway.execute("damping")
     await gateway.execute("emergency_stop")
 
     assert calls == [
         ("POST", "/api/control/move", {"command": "forward"}),
         ("POST", "/api/control/posture", {"command": "stand_up"}),
         ("POST", "/api/control/speed", {"percent": 35}),
+        ("POST", "/api/control/obstacle-avoidance", {"enabled": False}),
+        ("POST", "/api/control/damping", {}),
         ("POST", "/api/control/stop", {}),
     ]
 
@@ -44,6 +48,15 @@ async def test_commands_are_mapped_to_gateway_routes(monkeypatch) -> None:
 async def test_unknown_command_is_rejected() -> None:
     with pytest.raises(RobotGatewayRejected):
         await make_gateway().execute("dance")
+
+
+@pytest.mark.asyncio
+async def test_obstacle_avoidance_requires_boolean_state() -> None:
+    with pytest.raises(RobotGatewayRejected):
+        await make_gateway().execute(
+            "set_obstacle_avoidance",
+            {"enabled": "false"},
+        )
 
 
 def test_gateway_status_is_normalized_for_frontend() -> None:

@@ -39,9 +39,9 @@ O frontend antigo em HTML estático foi substituído pelo aplicativo React. O na
 | Salvar e reiniciar mapa | ✅ | PCD binário + JSON de metadados |
 | Teleoperação `WASD` | ✅ | Avançar, recuar e girar no próprio eixo |
 | Levantar e deitar | ✅ | API Sport do Go2 |
-| Controle de velocidade | ✅ | Faixa completa de 5% a 100%, passos de 5% |
-| Anticolisão nativo | ✅ | Serviço `obstacles_avoid` do próprio Go2 |
-| Parada de emergência | ✅ | Stop + desarme do controle |
+| Controle de velocidade | ✅ | Padrão em 100%, faixa de 10% a 100%, passos de 10% |
+| Obstacle Avoidance | ✅ | Serviço `obstacles_avoid` do próprio Go2, ativável no painel |
+| Damping | ✅ | Modo oficial de amortecimento da API Sport do Go2 |
 | Fila para operação 4G | ✅ | Supabase `robot_commands` |
 | Solicitação Oracle | 🟡 | Fila criada; processamento externo ainda será conectado |
 | Navegação autônoma | 🟡 | Próxima etapa: planner, costmap e missões |
@@ -219,18 +219,20 @@ Depois do login, o usuário comum entra diretamente nos recursos operacionais pe
 | espaço | parada de movimento |
 | Levantar / Deitar | mudar postura |
 | `−` / `+` | ajustar velocidade segura |
+| Damping | acionar o modo oficial de amortecimento da Unitree |
+| Ativar / Desativar Obstacle Avoidance | alternar e confirmar o estado do serviço nativo |
 
-Para mover, o operador precisa habilitar o controle, o robô precisa estar em pé e o anticolisão nativo precisa estar confirmado. Um heartbeat é enviado enquanto a tecla permanece pressionada; ao soltar a tecla o painel envia parada imediatamente e o watchdog do gateway aplica uma segunda parada em até `0,25 s` se os comandos cessarem.
+Para mover, o operador precisa habilitar o controle, o robô precisa estar em pé e o estado solicitado do Obstacle Avoidance precisa estar confirmado. Um heartbeat é enviado enquanto a tecla permanece pressionada; ao soltar a tecla o painel envia parada imediatamente e o watchdog do gateway aplica uma segunda parada em até `0,25 s` se os comandos cessarem.
 
 O cabeçalho apresenta as marcas XD4 Robotics e Oracle com o mesmo espaço visual. Os botões **Claro** e **Escuro** mudam o tema explicitamente e preservam a escolha no navegador.
 
 ## Proteção anticolisão
 
-A locomoção usa diretamente o serviço nativo `obstacles_avoid` do Go2. O nó habilita o switch oficial, confirma seu estado e envia os comandos de velocidade pela mesma API nativa. Isso deixa a distância e a resposta aos sensores sob responsabilidade do controlador embarcado do robô, sem uma segunda zona local alternando os botões da interface.
+A locomoção usa diretamente o serviço nativo `obstacles_avoid` do Go2. O nó envia `enable: true` ou `enable: false`, confirma o estado real e envia os comandos de velocidade pela mesma API nativa. Quando habilitado, a distância e a resposta aos sensores ficam sob responsabilidade do controlador embarcado do robô.
 
-Se o serviço nativo não confirmar que está habilitado, a locomoção permanece bloqueada. O SLAM e a criação da nuvem de pontos continuam independentes desse estado.
+Se o serviço nativo não confirmar o estado solicitado, a locomoção permanece bloqueada. O SLAM e a criação da nuvem de pontos continuam independentes desse estado.
 
-> Esta proteção reduz o risco, mas não transforma o robô em equipamento certificado para segurança de pessoas. O primeiro teste físico deve ser supervisionado, em baixa velocidade, com acesso à parada de emergência e sem usar uma pessoa como primeiro obstáculo.
+> Esta proteção reduz o risco, mas não transforma o robô em equipamento certificado para segurança de pessoas. O primeiro teste físico deve ser supervisionado, em baixa velocidade e sem usar uma pessoa como primeiro obstáculo.
 
 ## Mapeamento SLAM
 

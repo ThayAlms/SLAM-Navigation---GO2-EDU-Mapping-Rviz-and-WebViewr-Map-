@@ -71,6 +71,8 @@ def normalized_status(status):
         "speed_max_percent",
         "speed_step_percent",
         "obstacle_avoidance_enabled",
+        "obstacle_avoidance_requested",
+        "obstacle_avoidance_state_confirmed",
         "native_avoidance_confirmed",
         "native_avoidance_confirmation_age_seconds",
         "safety_mode",

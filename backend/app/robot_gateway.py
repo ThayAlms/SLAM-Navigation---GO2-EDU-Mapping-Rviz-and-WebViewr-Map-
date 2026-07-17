@@ -128,6 +128,23 @@ class RobotGatewayClient:
                     json={"percent": payload.get("percent")},
                 )
             ).json()
+        if command == "set_obstacle_avoidance":
+            enabled = payload.get("enabled")
+            if not isinstance(enabled, bool):
+                raise RobotGatewayRejected(
+                    "Estado do anticolisão deve ser booleano."
+                )
+            return (
+                await self._request(
+                    "POST",
+                    "/api/control/obstacle-avoidance",
+                    json={"enabled": enabled},
+                )
+            ).json()
+        if command == "damping":
+            return (
+                await self._request("POST", "/api/control/damping", json={})
+            ).json()
         if command == "reset_map":
             return (await self._request("POST", "/api/map/reset", json={})).json()
         if command == "save_map":

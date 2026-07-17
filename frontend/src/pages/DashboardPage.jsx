@@ -28,11 +28,13 @@ const OFFLINE_STATUS = {
   point_count: 0,
   current_location: null,
   current_pose: null,
-  speed_limit_percent: 55,
-  speed_min_percent: 5,
+  speed_limit_percent: 100,
+  speed_min_percent: 10,
   speed_max_percent: 100,
-  speed_step_percent: 5,
+  speed_step_percent: 10,
   obstacle_avoidance_enabled: false,
+  obstacle_avoidance_requested: false,
+  obstacle_avoidance_state_confirmed: false,
   native_avoidance_confirmed: false,
   safety_mode: "unitree_native_obstacles_avoid",
   safety_ready: false,
@@ -353,9 +355,13 @@ function DashboardPage() {
     }
   }
 
-  function handleEmergencyStop() {
+  function handleDamping() {
     stopMotion(false);
-    handleAction("emergency_stop", {}, "Parada de emergência enviada e controle desarmado.");
+    handleAction(
+      "damping",
+      {},
+      "Damping oficial da Unitree enviado; o controle permanece disponível.",
+    );
   }
 
   const location = robotStatus.current_location;
@@ -363,6 +369,8 @@ function DashboardPage() {
   const speedMin = robotStatus.speed_min_percent;
   const speedMax = robotStatus.speed_max_percent;
   const speedStep = robotStatus.speed_step_percent;
+  const lowerSpeed = Math.max(speedMin, speed - speedStep);
+  const higherSpeed = Math.min(speedMax, speed + speedStep);
   const postureControlsDisabled =
     !robotStatus.sdk_connected || !robotStatus.control_armed || Boolean(pendingAction);
   const postureTransitioning = robotStatus.posture?.startsWith("transitioning_");
@@ -370,18 +378,39 @@ function DashboardPage() {
     postureControlsDisabled || postureTransitioning || robotStatus.posture === "standing";
   const standDownDisabled =
     postureControlsDisabled || postureTransitioning || robotStatus.posture === "lying";
+  const avoidanceEnabled = Boolean(robotStatus.obstacle_avoidance_enabled);
+  const avoidanceStateConfirmed = Boolean(
+    robotStatus.obstacle_avoidance_state_confirmed,
+  );
+  const nativeAvoidanceConfirmed = Boolean(
+    robotStatus.native_avoidance_confirmed,
+  );
+  const avoidanceConfirmed = avoidanceEnabled
+    ? avoidanceStateConfirmed && nativeAvoidanceConfirmed
+    : avoidanceStateConfirmed;
+  const avoidanceChanging =
+    pendingAction === "set_obstacle_avoidance" || !avoidanceConfirmed;
   const safetyState = robotStatus.safety_blocked
     ? "blocked"
-    : robotStatus.safety_ready
+    : avoidanceConfirmed && !avoidanceEnabled
+      ? "unprotected"
+      : robotStatus.safety_ready
       ? "protected"
       : "unavailable";
   const safetyLabel = robotStatus.safety_blocked
     ? "Limite detectado · robô parado"
-    : robotStatus.safety_ready
+    : avoidanceConfirmed && !avoidanceEnabled
+      ? "Modo livre confirmado · sem barreira de obstáculos"
+      : robotStatus.safety_ready
       ? "API confirmada"
       : robotStatus.control_armed && robotStatus.native_avoidance_confirmed
         ? "Confirmando canal de controle"
         : "Aguardando confirmação";
+  const safetyTitle = avoidanceEnabled
+    ? "Proteção Unitree"
+    : avoidanceConfirmed
+      ? "Anticolisão desabilitada"
+      : "Confirmando anticolisão";
   const controlLabel = robotStatus.safety_blocked
     ? "LIMITE DE SEGURANÇA"
     : robotStatus.control_armed
@@ -473,7 +502,7 @@ function DashboardPage() {
 
           <div className={`native-safety-status native-safety-status--${safetyState}`} role="status">
             <span aria-hidden="true" />
-            <strong>Proteção Unitree</strong>
+            <strong>{safetyTitle}</strong>
             <small>{safetyLabel}</small>
           </div>
 
@@ -497,7 +526,11 @@ function DashboardPage() {
                   handleAction(
                     robotStatus.control_armed ? "disarm" : "arm",
                     {},
-                    robotStatus.control_armed ? "Controle bloqueado." : "Controle habilitado com segurança.",
+                    robotStatus.control_armed
+                      ? "Controle bloqueado."
+                      : avoidanceEnabled
+                        ? "Controle habilitado com anticolisão."
+                        : "Controle habilitado em modo livre.",
                   )
                 }
               >
@@ -508,6 +541,43 @@ function DashboardPage() {
                       ? "Canal ativo · toque para bloquear"
                       : "Aguardando confirmação da Unitree"
                     : "Toque para ativar o canal"}
+                </small>
+              </button>
+
+              <button
+                className={`ui-button teleoperation-avoidance-button ${avoidanceEnabled ? "is-enabled" : "is-disabled"}`}
+                type="button"
+                aria-pressed={avoidanceEnabled}
+                disabled={
+                  !robotStatus.sdk_connected ||
+                  Boolean(pendingAction) ||
+                  !avoidanceConfirmed
+                }
+                onClick={() =>
+                  handleAction(
+                    "set_obstacle_avoidance",
+                    { enabled: !avoidanceEnabled },
+                    avoidanceEnabled
+                      ? "Desativação do anticolisão enviada."
+                      : "Ativação do anticolisão enviada.",
+                  )
+                }
+              >
+                <strong>
+                  {avoidanceChanging
+                    ? "Confirmando Obstacle Avoidance..."
+                    : avoidanceEnabled
+                      ? "Desativar Obstacle Avoidance"
+                      : "Ativar Obstacle Avoidance"}
+                </strong>
+                <small>
+                  {avoidanceEnabled
+                    ? nativeAvoidanceConfirmed
+                      ? "Proteção nativa confirmada e ativa"
+                      : "Aguardando confirmação nativa"
+                    : avoidanceStateConfirmed
+                      ? "Estado nativo confirmado como desativado"
+                      : "Aguardando estado real do robô"}
                 </small>
               </button>
 
@@ -594,7 +664,7 @@ function DashboardPage() {
                   type="button"
                   aria-label="Diminuir velocidade"
                   disabled={!robotStatus.sdk_connected || speed <= speedMin || Boolean(pendingAction)}
-                  onClick={() => handleAction("set_speed", { percent: speed - speedStep }, `Velocidade ajustada para ${speed - speedStep}%.`)}
+                  onClick={() => handleAction("set_speed", { percent: lowerSpeed }, `Velocidade ajustada para ${lowerSpeed}%.`)}
                 >−</button>
                 <strong>{speed}%</strong>
                 <button
@@ -602,7 +672,7 @@ function DashboardPage() {
                   type="button"
                   aria-label="Aumentar velocidade"
                   disabled={!robotStatus.sdk_connected || speed >= speedMax || Boolean(pendingAction)}
-                  onClick={() => handleAction("set_speed", { percent: speed + speedStep }, `Velocidade ajustada para ${speed + speedStep}%.`)}
+                  onClick={() => handleAction("set_speed", { percent: higherSpeed }, `Velocidade ajustada para ${higherSpeed}%.`)}
                 >+</button>
               </div>
               <small>Nível operacional · {speedMin}%–{speedMax}%</small>
@@ -613,10 +683,10 @@ function DashboardPage() {
             <button
               className="ui-button ui-button--danger teleoperation-emergency"
               type="button"
-              onClick={handleEmergencyStop}
-              disabled={!accessToken || pendingAction === "emergency_stop"}
+              onClick={handleDamping}
+              disabled={!accessToken || pendingAction === "damping"}
             >
-              <span aria-hidden="true">■</span> Parada de emergência
+              <span aria-hidden="true">■</span> Damping
             </button>
           </div>
           {statusMessage && <p className="operation-message" role="status">{statusMessage}</p>}

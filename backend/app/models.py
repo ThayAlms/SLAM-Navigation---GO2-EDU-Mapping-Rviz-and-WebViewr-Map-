@@ -15,6 +15,8 @@ class RobotCommandName(str, Enum):
     ARM = "arm"
     DISARM = "disarm"
     SET_SPEED = "set_speed"
+    SET_OBSTACLE_AVOIDANCE = "set_obstacle_avoidance"
+    DAMPING = "damping"
     RESET_MAP = "reset_map"
     SAVE_MAP = "save_map"
     STOP = "stop"

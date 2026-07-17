@@ -139,6 +139,7 @@
 }
 
 :root[data-theme="light"] .teleoperation-arm-button,
+:root[data-theme="light"] .teleoperation-avoidance-button,
 :root[data-theme="light"] .teleoperation-posture button,
 :root[data-theme="light"] .teleoperation-key,
 :root[data-theme="light"] .teleoperation-speed__button {

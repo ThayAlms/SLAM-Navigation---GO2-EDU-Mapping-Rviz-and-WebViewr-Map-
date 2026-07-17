@@ -34,6 +34,7 @@ from std_srvs.srv import Trigger
 from unitree_api.msg import Request, Response
 from unitree_go.msg import SportModeState
 
+DAMP_API_ID = 1001
 MOVE_API_ID = 1008
 STOP_API_ID = 1003
 STAND_UP_API_ID = 1004
@@ -56,10 +57,10 @@ SENSOR_STATUS_TIMEOUT_SECONDS = 2.0
 ROBOT_STATUS_TIMEOUT_SECONDS = 2.0
 SPORT_STATE_STATUS_TIMEOUT_SECONDS = 2.0
 SPORT_STATE_SAFETY_TIMEOUT_SECONDS = 1.0
-DEFAULT_SPEED_PERCENT = 55
-MIN_SPEED_PERCENT = 5
+DEFAULT_SPEED_PERCENT = 100
+MIN_SPEED_PERCENT = 10
 MAX_SPEED_PERCENT = 100
-SPEED_STEP_PERCENT = 5
+SPEED_STEP_PERCENT = 10
 
 # Convenção do SDK: x é longitudinal, y é lateral e z é velocidade de yaw.
 # O recuo fica mais lento porque foi o movimento que apresentou instabilidade.
@@ -72,6 +73,7 @@ MOTION_PROFILES = {
 
 SAFETY_REASON_MESSAGES = {
     "native_avoidance_unconfirmed": "anticolisão nativo ainda não confirmado",
+    "avoidance_mode_unconfirmed": "modo do anticolisão ainda não confirmado",
     "remote_source_unconfirmed": "canal remoto seguro ainda não confirmado",
     "sport_state_unavailable": "estado de movimento do robô indisponível",
     "native_obstacle_limit": "limite de obstáculo detectado",
@@ -180,11 +182,13 @@ class Go2MappingNode(Node):
         self._speed_percent = DEFAULT_SPEED_PERCENT
         self._request_sequence = time.monotonic_ns()
         self._remote_commands_from_api = False
+        self._obstacle_avoidance_requested = True
         self._native_avoidance_enabled = None
         self._native_avoidance_confirmed_at = 0.0
         self._remote_source_confirmed_at = 0.0
         self._last_remote_source_request_at = 0.0
         self._remote_source_requests = {}
+        self._avoidance_requests = {}
         self._last_avoidance_request_at = 0.0
         self._last_sport_response = None
         self._last_sport_response_at = 0.0
@@ -433,6 +437,7 @@ class Go2MappingNode(Node):
     def _sport_response_callback(self, msg):
         api_id = int(msg.header.identity.api_id)
         if api_id not in {
+            DAMP_API_ID,
             MOVE_API_ID,
             STOP_API_ID,
             STAND_UP_API_ID,
@@ -471,21 +476,23 @@ class Go2MappingNode(Node):
             REMOTE_AVOIDANCE_SWITCH_GET_API_ID,
         }:
             self._last_avoidance_response = response_info
-            enabled = api_id == REMOTE_AVOIDANCE_SWITCH_SET_API_ID
+            request_id = int(msg.header.identity.id)
+            requested = self._avoidance_requests.pop(request_id, None)
+            enabled = requested
             if data:
                 try:
                     payload = json.loads(data)
-                    enabled = bool(payload.get("enable", enabled))
+                    if "enable" in payload:
+                        enabled = bool(payload["enable"])
                 except (TypeError, ValueError, AttributeError):
-                    enabled = False
-            self._native_avoidance_enabled = (
-                enabled if status_code == 0 else False
-            )
-            self._native_avoidance_confirmed_at = (
-                self._last_remote_response_at
-                if self._native_avoidance_enabled
-                else 0.0
-            )
+                    enabled = None
+            if status_code == 0 and enabled is not None:
+                self._native_avoidance_enabled = enabled
+                self._native_avoidance_confirmed_at = (
+                    self._last_remote_response_at
+                )
+            elif status_code != 0:
+                self._native_avoidance_confirmed_at = 0.0
         elif api_id == REMOTE_SOURCE_API_ID:
             self._last_remote_source_response = response_info
             request_id = int(msg.header.identity.id)
@@ -502,9 +509,16 @@ class Go2MappingNode(Node):
                 self._remote_source_confirmed_at = 0.0
 
     def _native_avoidance_ready(self, now=None):
+        return (
+            self._obstacle_avoidance_state_ready(now)
+            and self._native_avoidance_enabled is True
+        )
+
+    def _obstacle_avoidance_state_ready(self, now=None):
         now = time.monotonic() if now is None else now
         return (
-            self._native_avoidance_enabled is True
+            self._native_avoidance_enabled
+            is self._obstacle_avoidance_requested
             and self._native_avoidance_confirmed_at > 0.0
             and now - self._native_avoidance_confirmed_at
             <= AVOIDANCE_CONFIRMATION_TIMEOUT_SECONDS
@@ -521,33 +535,28 @@ class Go2MappingNode(Node):
         now = time.monotonic()
         if now - self._last_avoidance_request_at < 1.5:
             return
-        if self._native_avoidance_enabled is not True:
-            self.remote_control_pub.publish(
-                self._new_remote_request(
-                    REMOTE_AVOIDANCE_SWITCH_SET_API_ID,
-                    {"enable": True},
-                )
+        if not self._obstacle_avoidance_state_ready(now):
+            self._request_obstacle_avoidance_state(
+                self._obstacle_avoidance_requested
             )
         else:
-            self.remote_control_pub.publish(
-                self._new_remote_request(
-                    REMOTE_AVOIDANCE_SWITCH_GET_API_ID,
-                    None,
-                )
-            )
+            self._request_obstacle_avoidance_state()
         if self._control_armed and (
             not self._remote_source_ready(now)
             or now - self._last_remote_source_request_at
             >= REMOTE_SOURCE_REFRESH_SECONDS
         ):
             self._set_remote_command_source(True)
-        self._last_avoidance_request_at = now
 
     def _movement_safety_reason(self, vx, vy, vyaw):
         del vx, vy, vyaw
         now = time.monotonic()
-        if not self._native_avoidance_ready(now):
-            return "native_avoidance_unconfirmed"
+        if not self._obstacle_avoidance_state_ready(now):
+            return (
+                "native_avoidance_unconfirmed"
+                if self._obstacle_avoidance_requested
+                else "avoidance_mode_unconfirmed"
+            )
         if self._control_armed and not self._remote_source_ready(now):
             return "remote_source_unconfirmed"
         if now - self._last_sport_state_at > SPORT_STATE_SAFETY_TIMEOUT_SECONDS:
@@ -810,8 +819,9 @@ class Go2MappingNode(Node):
             and now - self._last_odom_jump_at >= 1.0
         )
         native_avoidance_ready = self._native_avoidance_ready(now)
+        avoidance_state_ready = self._obstacle_avoidance_state_ready(now)
         remote_source_ready = self._remote_source_ready(now)
-        safety_ready = native_avoidance_ready and (
+        safety_ready = avoidance_state_ready and (
             not self._control_armed or remote_source_ready
         )
         with self._lock:
@@ -853,8 +863,16 @@ class Go2MappingNode(Node):
                 "yaw": self._active_velocity[2],
             },
             "control_transport": "obstacles_avoid_remote_api",
-            "safety_mode": "unitree_native_obstacles_avoid",
+            "safety_mode": (
+                "unitree_native_obstacles_avoid"
+                if self._obstacle_avoidance_requested
+                else "operator_free_mode"
+            ),
             "obstacle_avoidance_enabled": native_avoidance_ready,
+            "obstacle_avoidance_requested": (
+                self._obstacle_avoidance_requested
+            ),
+            "obstacle_avoidance_state_confirmed": avoidance_state_ready,
             "native_avoidance_switch": self._native_avoidance_enabled,
             "native_avoidance_confirmed": native_avoidance_ready,
             "native_avoidance_confirmation_age_seconds": (
@@ -1057,9 +1075,9 @@ class Go2MappingNode(Node):
         enabled = bool(enabled)
         if enabled:
             self._ensure_native_obstacle_avoidance()
-            if not self._native_avoidance_ready():
+            if not self._obstacle_avoidance_state_ready():
                 raise RuntimeError(
-                    "controle bloqueado: anticolisão nativo não confirmado"
+                    "controle bloqueado: modo do anticolisão não confirmado"
                 )
             self._control_armed = True
             self._set_remote_command_source(True)
@@ -1070,6 +1088,21 @@ class Go2MappingNode(Node):
         self.get_logger().info(
             "Controle %s." % ("armado" if enabled else "desarmado")
         )
+
+    def set_obstacle_avoidance(self, enabled):
+        if not isinstance(enabled, bool):
+            raise ValueError("informe true ou false para o anticolisão")
+        with self._control_lock:
+            self.stop_motion(force=True, clear_safety_block=True)
+            self._obstacle_avoidance_requested = enabled
+            if self._native_avoidance_enabled is not enabled:
+                self._native_avoidance_confirmed_at = 0.0
+            self._request_obstacle_avoidance_state(enabled)
+        self.get_logger().warning(
+            "Anticolisão nativo solicitado: %s."
+            % ("HABILITAR" if enabled else "DESABILITAR")
+        )
+        return enabled
 
     def _new_sport_request(self, api_id, parameter=None, noreply=False):
         self._request_sequence += 1
@@ -1087,6 +1120,23 @@ class Go2MappingNode(Node):
             api_id, parameter, noreply=noreply
         )
         return request
+
+    def _request_obstacle_avoidance_state(self, enabled=None):
+        is_set_request = enabled is not None
+        requested = bool(enabled) if is_set_request else None
+        request = self._new_remote_request(
+            REMOTE_AVOIDANCE_SWITCH_SET_API_ID
+            if is_set_request
+            else REMOTE_AVOIDANCE_SWITCH_GET_API_ID,
+            {"enable": requested} if is_set_request else None,
+        )
+        request_id = int(request.header.identity.id)
+        self._avoidance_requests[request_id] = requested
+        if len(self._avoidance_requests) > 20:
+            oldest = next(iter(self._avoidance_requests))
+            self._avoidance_requests.pop(oldest, None)
+        self.remote_control_pub.publish(request)
+        self._last_avoidance_request_at = time.monotonic()
 
     def _set_remote_command_source(self, enabled):
         request = self._new_remote_request(
@@ -1186,11 +1236,11 @@ class Go2MappingNode(Node):
         try:
             requested = float(percent)
         except (TypeError, ValueError):
-            raise ValueError("informe uma velocidade entre 5% e 100%")
+            raise ValueError("informe uma velocidade entre 10% e 100%")
         if not math.isfinite(requested):
             raise ValueError("velocidade inválida")
         if requested < MIN_SPEED_PERCENT or requested > MAX_SPEED_PERCENT:
-            raise ValueError("a velocidade deve ficar entre 5% e 100%")
+            raise ValueError("a velocidade deve ficar entre 10% e 100%")
 
         selected = int(
             round(requested / SPEED_STEP_PERCENT) * SPEED_STEP_PERCENT
@@ -1263,6 +1313,24 @@ class Go2MappingNode(Node):
             % ("LEVANTAR" if posture == "stand_up" else "DEITAR")
         )
 
+    def damping(self):
+        with self._control_lock:
+            self.stop_motion(force=True, clear_safety_block=True)
+            request = self._new_sport_request(DAMP_API_ID)
+            self.sport_pub.publish(request)
+            self._posture_target = None
+            self._posture_command_at = time.monotonic()
+            self._posture_state = "damping"
+            self._posture_candidate = None
+            self._posture_candidate_since = 0.0
+            self._last_command = "damping"
+            self._last_command_at = time.monotonic()
+        self.get_logger().warning(
+            "DAMPING: modo de amortecimento oficial da Unitree enviado; "
+            "canal de controle preservado."
+        )
+        return self._control_armed
+
     def toggle_posture(self):
         if self._posture_state.startswith("transitioning_"):
             raise RuntimeError("aguarde a mudança de postura terminar")
@@ -1290,7 +1358,10 @@ class Go2MappingNode(Node):
                     % SAFETY_REASON_MESSAGES.get(safety_reason, safety_reason)
                 )
                 return
-            if self._native_motion_stalled(now):
+            if (
+                self._obstacle_avoidance_requested
+                and self._native_motion_stalled(now)
+            ):
                 self.stop_motion(force=True)
                 self._safety_blocked = True
                 self._safety_block_reason = "native_obstacle_limit"
@@ -1339,7 +1410,7 @@ class Go2MappingNode(Node):
 
 class KeyboardController:
     HELP = """
-Controles de mapeamento (velocidade ajustável: 5% a 100%)
+Controles de mapeamento (velocidade ajustável: 10% a 100%)
   I             armar movimento
   O             desarmar movimento
   W/S ou ↑/↓    avançar / recuar
