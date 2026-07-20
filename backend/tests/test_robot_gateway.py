@@ -33,6 +33,7 @@ async def test_commands_are_mapped_to_gateway_routes(monkeypatch) -> None:
     )
     await gateway.execute("forward")
     await gateway.execute("stand_up")
+    await gateway.execute("recovery_stand")
     await gateway.execute("set_speed", {"percent": 35})
     await gateway.execute("set_obstacle_avoidance", {"enabled": False})
     await gateway.execute("damping")
@@ -46,6 +47,7 @@ async def test_commands_are_mapped_to_gateway_routes(monkeypatch) -> None:
         ),
         ("POST", "/api/control/move", {"command": "forward"}),
         ("POST", "/api/control/posture", {"command": "stand_up"}),
+        ("POST", "/api/control/posture", {"command": "recovery_stand"}),
         ("POST", "/api/control/speed", {"percent": 35}),
         ("POST", "/api/control/obstacle-avoidance", {"enabled": False}),
         ("POST", "/api/control/damping", {}),

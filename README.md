@@ -105,7 +105,8 @@ No SQL Editor do projeto Supabase, aplique em ordem:
 1. `supabase/migrations/202607150001_initial_schema.sql`;
 2. `supabase/migrations/202607150002_sync_auth_profiles.sql`;
 3. `supabase/migrations/202607160003_go2_control_commands.sql`;
-4. `supabase/migrations/202607200004_gamepad_control.sql`.
+4. `supabase/migrations/202607200004_gamepad_control.sql`;
+5. `supabase/migrations/202607200005_recovery_stand.sql`.
 
 Em **Authentication → Users**, crie manualmente a primeira conta e marque o e-mail como confirmado. Depois, no SQL Editor, torne-a administradora:
 
@@ -251,7 +252,7 @@ Depois do login, o usuário comum entra diretamente nos recursos operacionais pe
 | Manche direito USB | giro analógico |
 | `START`/`Options` | habilitar o canal de controle |
 | `L2 + B`/Círculo | damping de emergência |
-| `L2 + X`/Quadrado | levantar |
+| `L2 + X`/Quadrado | recuperar e levantar (RecoveryStand oficial) |
 | `L2 + A`/Cruz | alternar entre levantar e deitar |
 | `X`/Quadrado | ligar Obstacle Avoidance |
 | `Y`/Triângulo por 3 s | desligar Obstacle Avoidance |

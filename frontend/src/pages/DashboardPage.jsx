@@ -426,7 +426,9 @@ function DashboardPage({ demoMode = false }) {
         setDemoRobotStatus((current) => {
           if (command === "arm") return { ...current, control_armed: true };
           if (command === "disarm") return { ...current, control_armed: false };
-          if (command === "stand_up") return { ...current, posture: "standing" };
+          if (command === "stand_up" || command === "recovery_stand") {
+            return { ...current, posture: "standing" };
+          }
           if (command === "stand_down") return { ...current, posture: "lying" };
           if (command === "set_speed") {
             return { ...current, speed_limit_percent: payload.percent };
@@ -551,6 +553,12 @@ function DashboardPage({ demoMode = false }) {
         handleDamping();
       } else if (action === "stand_up") {
         handleAction("stand_up", {}, "Comando para levantar enviado pelo gamepad.");
+      } else if (action === "recovery_stand") {
+        handleAction(
+          "recovery_stand",
+          {},
+          "Comando de recuperação para levantar enviado pelo gamepad.",
+        );
       } else if (action === "toggle_posture") {
         const command = robotStatus.posture === "standing" ? "stand_down" : "stand_up";
         handleAction(

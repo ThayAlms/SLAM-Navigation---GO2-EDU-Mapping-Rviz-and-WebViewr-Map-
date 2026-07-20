@@ -1,4 +1,5 @@
 export const GAMEPAD_DEAD_ZONE = 0.14;
+export const GAMEPAD_BUTTON_THRESHOLD = 0.25;
 
 function rawAxis(gamepad, index) {
   const value = Number(gamepad?.axes?.[index] || 0);
@@ -30,7 +31,21 @@ export function hasGamepadMotion(vector) {
 
 export function isGamepadButtonPressed(buttons, index) {
   const button = buttons?.[index];
-  return Boolean(button?.pressed || button?.value > 0.5);
+  return Boolean(button?.pressed || button?.value > GAMEPAD_BUTTON_THRESHOLD);
+}
+
+export function isGamepadChordActivated(
+  buttons,
+  previousButtons,
+  modifierIndex,
+  actionIndex,
+) {
+  const modifierPressed = isGamepadButtonPressed(buttons, modifierIndex);
+  const actionPressed = isGamepadButtonPressed(buttons, actionIndex);
+  const chordWasPressed = Boolean(
+    previousButtons?.[modifierIndex] && previousButtons?.[actionIndex],
+  );
+  return modifierPressed && actionPressed && !chordWasPressed;
 }
 
 export function gamepadDisplayName(id = "") {

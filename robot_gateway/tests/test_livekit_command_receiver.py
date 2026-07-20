@@ -5,6 +5,12 @@ from robot_gateway.livekit_command_receiver import gateway_action
 
 
 class GatewayActionTest(unittest.TestCase):
+    def test_maps_recovery_stand_to_posture_route(self):
+        path, body = gateway_action("recovery_stand", {})
+
+        self.assertEqual(path, "/api/control/posture")
+        self.assertEqual(body, {"command": "recovery_stand"})
+
     def test_maps_analog_move_to_joystick_route(self):
         path, body = gateway_action(
             "move_analog",

@@ -4,8 +4,11 @@ import {
   gamepadDisplayName,
   hasGamepadMotion,
   isGamepadButtonPressed,
+  isGamepadChordActivated,
   readGamepadMotion,
 } from "./gamepad";
+
+const STANDALONE_BUTTON_GRACE_MS = 250;
 
 const INITIAL_STATE = {
   supported: true,
@@ -46,6 +49,8 @@ export function useGamepadControl({ canMove, onMotion, onStop, onAction }) {
     let previousButtons = [];
     let avoidanceOffStartedAt = null;
     let avoidanceOffSent = false;
+    let avoidanceOnStartedAt = null;
+    let avoidanceOnSent = false;
     let pageActive = !document.hidden && document.hasFocus();
     let movementSuppressed = false;
 
@@ -75,6 +80,7 @@ export function useGamepadControl({ canMove, onMotion, onStop, onAction }) {
     function readButtons(gamepad, now) {
       const buttons = gamepad.buttons || [];
       const l2 = isGamepadButtonPressed(buttons, 6);
+      const squareOrX = isGamepadButtonPressed(buttons, 2);
       let actionTriggered = false;
 
       function emitAction(action) {
@@ -84,16 +90,28 @@ export function useGamepadControl({ canMove, onMotion, onStop, onAction }) {
 
       // Layout padrão dos navegadores: A/Cross=0, B/Circle=1,
       // X/Square=2, Y/Triangle=3, L2=6 e START/Options=9.
-      if (rising(buttons, 9) && !l2) {
+      if (isGamepadChordActivated(buttons, previousButtons, 6, 1)) {
+        emitAction("damping");
+      } else if (isGamepadChordActivated(buttons, previousButtons, 6, 2)) {
+        emitAction("recovery_stand");
+      } else if (isGamepadChordActivated(buttons, previousButtons, 6, 0)) {
+        emitAction("toggle_posture");
+      } else if (rising(buttons, 9) && !l2) {
         emitAction("arm");
       }
-      if (rising(buttons, 1) && l2) {
-        emitAction("damping");
-      } else if (rising(buttons, 2) && l2) {
-        emitAction("stand_up");
-      } else if (rising(buttons, 0) && l2) {
-        emitAction("toggle_posture");
-      } else if (rising(buttons, 2) && !l2) {
+
+      if (!squareOrX || l2) {
+        avoidanceOnStartedAt = null;
+        avoidanceOnSent = false;
+      } else if (!previousButtons[2]) {
+        avoidanceOnStartedAt = now;
+        avoidanceOnSent = false;
+      } else if (
+        !avoidanceOnSent &&
+        avoidanceOnStartedAt !== null &&
+        now - avoidanceOnStartedAt >= STANDALONE_BUTTON_GRACE_MS
+      ) {
+        avoidanceOnSent = true;
         emitAction("avoidance_on");
       }
 
@@ -116,7 +134,7 @@ export function useGamepadControl({ canMove, onMotion, onStop, onAction }) {
 
       previousButtons = Array.from(
         buttons,
-        (button) => Boolean(button.pressed || button.value > 0.5),
+        (_, index) => isGamepadButtonPressed(buttons, index),
       );
       return actionTriggered;
     }

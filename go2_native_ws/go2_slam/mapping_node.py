@@ -52,6 +52,7 @@ MOVE_API_ID = 1008
 STOP_API_ID = 1003
 STAND_UP_API_ID = 1004
 STAND_DOWN_API_ID = 1005
+RECOVERY_STAND_API_ID = 1006
 REMOTE_MOVE_API_ID = 1003
 REMOTE_SOURCE_API_ID = 1004
 REMOTE_AVOIDANCE_SWITCH_SET_API_ID = 1001
@@ -441,6 +442,7 @@ class Go2MappingNode(Node):
             STOP_API_ID,
             STAND_UP_API_ID,
             STAND_DOWN_API_ID,
+            RECOVERY_STAND_API_ID,
         }:
             return
         self._last_sport_response_at = time.monotonic()
@@ -1351,24 +1353,29 @@ class Go2MappingNode(Node):
         api_ids = {
             "stand_up": STAND_UP_API_ID,
             "stand_down": STAND_DOWN_API_ID,
+            "recovery_stand": RECOVERY_STAND_API_ID,
         }
         if posture not in api_ids:
             raise ValueError("comando de postura inválido")
-        target_state = "standing" if posture == "stand_up" else "lying"
-        if self._posture_state == target_state:
+        target_state = "lying" if posture == "stand_down" else "standing"
+        if posture != "recovery_stand" and self._posture_state == target_state:
             return
 
         self.stop_motion(clear_safety_block=True)
         request = self._new_sport_request(api_ids[posture])
         self.sport_pub.publish(request)
-        self._posture_target = "up" if posture == "stand_up" else "down"
+        self._posture_target = "down" if posture == "stand_down" else "up"
         self._posture_command_at = time.monotonic()
         self._posture_state = "transitioning_" + self._posture_target
         self._posture_candidate = None
         self._posture_candidate_since = 0.0
         self.get_logger().warning(
             "Comando de postura enviado: %s."
-            % ("LEVANTAR" if posture == "stand_up" else "DEITAR")
+            % {
+                "stand_up": "LEVANTAR",
+                "stand_down": "DEITAR",
+                "recovery_stand": "RECUPERAR E LEVANTAR",
+            }[posture]
         )
 
     def damping(self):

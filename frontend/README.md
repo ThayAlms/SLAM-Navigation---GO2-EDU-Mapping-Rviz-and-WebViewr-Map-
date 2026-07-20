@@ -53,7 +53,7 @@ padronizado para controles PS4/PS5/Xbox.
 - Manche direito horizontal: giro.
 - `START`/`Options`: habilita o canal de controle.
 - `L2 + B`/Círculo: damping de emergência.
-- `L2 + X`/Quadrado: levantar.
+- `L2 + X`/Quadrado: recuperar e levantar (RecoveryStand oficial).
 - `L2 + A`/Cruz: alternar entre levantar e deitar.
 - `X`/Quadrado: ligar anticolisão.
 - `Y`/Triângulo por 3 segundos: desligar anticolisão.

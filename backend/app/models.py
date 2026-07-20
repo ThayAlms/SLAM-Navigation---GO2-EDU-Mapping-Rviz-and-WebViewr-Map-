@@ -13,6 +13,7 @@ class RobotCommandName(str, Enum):
     ROTATE_RIGHT = "rotate_right"
     STAND_UP = "stand_up"
     STAND_DOWN = "stand_down"
+    RECOVERY_STAND = "recovery_stand"
     ARM = "arm"
     DISARM = "disarm"
     SET_SPEED = "set_speed"

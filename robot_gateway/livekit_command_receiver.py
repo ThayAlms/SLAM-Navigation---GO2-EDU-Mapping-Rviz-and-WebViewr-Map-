@@ -25,6 +25,7 @@ ALLOWED_COMMANDS = {
     "rotate_right",
     "stand_up",
     "stand_down",
+    "recovery_stand",
     "arm",
     "disarm",
     "set_speed",
@@ -102,7 +103,7 @@ def gateway_action(command, payload):
         return "/api/control/joystick", axes
     if command in {"forward", "backward", "rotate_left", "rotate_right", "stop"}:
         return "/api/control/move", {"command": command}
-    if command in {"stand_up", "stand_down"}:
+    if command in {"stand_up", "stand_down", "recovery_stand"}:
         return "/api/control/posture", {"command": command}
     if command in {"arm", "disarm"}:
         return "/api/control/arm", {"armed": command == "arm"}

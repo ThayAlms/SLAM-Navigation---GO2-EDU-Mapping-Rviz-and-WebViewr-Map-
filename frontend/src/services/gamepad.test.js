@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   gamepadDisplayName,
   hasGamepadMotion,
+  isGamepadButtonPressed,
+  isGamepadChordActivated,
   readGamepadMotion,
   shapeGamepadAxis,
 } from "./gamepad.js";
@@ -11,6 +13,32 @@ import {
 test("ignora deriva dentro da zona morta", () => {
   assert.equal(shapeGamepadAxis(0.1), 0);
   assert.equal(shapeGamepadAxis(-0.14), 0);
+});
+
+test("reconhece gatilho analógico antes do clique completo", () => {
+  assert.equal(isGamepadButtonPressed([{ pressed: false, value: 0.3 }], 0), true);
+  assert.equal(isGamepadButtonPressed([{ pressed: false, value: 0.2 }], 0), false);
+});
+
+test("reconhece combinação independentemente da ordem dos botões", () => {
+  const released = { pressed: false, value: 0 };
+  const pressed = { pressed: true, value: 1 };
+  const buttons = Array.from({ length: 7 }, () => released);
+  buttons[2] = pressed;
+  buttons[6] = pressed;
+
+  assert.equal(
+    isGamepadChordActivated(buttons, [false, false, true, false, false, false, false], 6, 2),
+    true,
+  );
+  assert.equal(
+    isGamepadChordActivated(buttons, [false, false, false, false, false, false, true], 6, 2),
+    true,
+  );
+  assert.equal(
+    isGamepadChordActivated(buttons, [false, false, true, false, false, false, true], 6, 2),
+    false,
+  );
 });
 
 test("mantém curso total e resposta progressiva", () => {

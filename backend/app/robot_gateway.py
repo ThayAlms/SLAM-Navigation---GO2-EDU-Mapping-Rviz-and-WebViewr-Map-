@@ -131,7 +131,7 @@ class RobotGatewayClient:
                     json={"command": command},
                 )
             ).json()
-        if command in {"stand_up", "stand_down"}:
+        if command in {"stand_up", "stand_down", "recovery_stand"}:
             return (
                 await self._request(
                     "POST",
