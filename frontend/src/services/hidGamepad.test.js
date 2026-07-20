@@ -99,3 +99,16 @@ test("neutraliza eixos auxiliares que repousam no extremo", () => {
   const baselines = hidAxisBaselines(input);
   assert.deepEqual(readHidMotion(input, baselines), { forward: 0, lateral: 0, yaw: 0 });
 });
+
+test("não aprende um manche inclinado como posição neutra", () => {
+  const input = {
+    axes: { x: 1, y: -1, z: -1 },
+    hat: { forward: 0, yaw: 0 },
+  };
+  assert.deepEqual(hidAxisBaselines(input), { x: 0, y: 0, z: -1 });
+  assert.deepEqual(readHidMotion(input, hidAxisBaselines(input)), {
+    forward: 1,
+    lateral: 0,
+    yaw: -1,
+  });
+});

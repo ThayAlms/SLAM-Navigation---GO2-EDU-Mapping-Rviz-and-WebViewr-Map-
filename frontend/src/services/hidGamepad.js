@@ -177,7 +177,12 @@ export function hidAxisBaselines(input) {
   return Object.fromEntries(
     Object.entries(input?.axes || {}).map(([axis, value]) => [
       axis,
-      Math.abs(value) < 0.2 || Math.abs(value) > 0.85 ? value : 0,
+      // X/Y e Rx/Ry são manches: uma primeira leitura inclinada nunca pode
+      // virar o novo centro. Eixos auxiliares em -1/+1 normalmente são
+      // gatilhos DirectInput e podem usar o extremo de repouso como baseline.
+      ["x", "y", "rx", "ry"].includes(axis)
+        ? Math.abs(value) < 0.2 ? value : 0
+        : Math.abs(value) < 0.2 || Math.abs(value) > 0.85 ? value : 0,
     ]),
   );
 }
