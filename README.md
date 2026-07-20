@@ -290,7 +290,17 @@ intencional para impedir que conectar um controle mova o robô sozinho.
 O texto **Nenhum controle USB detectado** é o estado de espera. A conexão só
 está confirmada quando o painel troca esse texto pelo nome do dispositivo, por
 exemplo **Controle Xbox conectado**. Se o nome não aparecer depois de pressionar
-um botão, o navegador ainda não recebeu o dispositivo do sistema operacional.
+um botão, clique em **Controle USB**. No Chrome ou Edge, o painel abre o seletor
+HID para controles genéricos, clones e modelos incomuns. Essa escolha é exigida
+pelo navegador somente no primeiro acesso; depois de autorizada, a conexão e a
+reconexão são automáticas. O fallback decodifica descritores HID padrão de
+joystick/gamepad, incluindo eixos X/Y, segundo manche, direcional e botões.
+
+O Firefox não oferece WebHID e usa somente a Gamepad API. Dispositivos que não
+se apresentam ao Ubuntu como gamepad ou HID, cabos que servem apenas para carga
+e controles com protocolo proprietário não podem ser convertidos por uma página
+web. Esses aparelhos são identificados quando possível, mas precisam de um
+mapeamento específico antes de enviar movimento ao robô.
 
 Para desenvolvimento local, inicie `./run_web.sh` na Jetson e, em outro terminal
 do notebook, crie o túnel local exigido pela segurança da Gamepad API:

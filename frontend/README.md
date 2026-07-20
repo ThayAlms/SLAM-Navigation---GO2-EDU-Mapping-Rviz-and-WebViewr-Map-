@@ -55,6 +55,14 @@ DirectInput comum de Logitech, 8BitDo e controles USB genéricos. Não há
 instalação ou calibração manual. O túnel acima só é necessário no desenvolvimento
 local.
 
+O painel possui duas camadas de compatibilidade. A Gamepad API detecta
+automaticamente controles padrão e DirectInput. Se um clone ou controle incomum
+não aparecer, clique em **Controle USB** e selecione o dispositivo na janela do
+Chrome ou Edge. Esse fallback usa WebHID, lê o descritor do próprio aparelho e
+mapeia eixos, segundo manche, direcional e botões. A permissão é solicitada uma
+vez; nas conexões seguintes o dispositivo autorizado é reaberto automaticamente.
+Firefox não oferece WebHID e permanece limitado à Gamepad API.
+
 - Manche esquerdo: frente/ré e deslocamento lateral.
 - Manche direito horizontal: giro.
 - Direcional: frente/ré e giro.

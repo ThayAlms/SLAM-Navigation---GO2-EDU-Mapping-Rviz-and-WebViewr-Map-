@@ -5,7 +5,7 @@
       "headers": [
         {
           "key": "Permissions-Policy",
-          "value": "gamepad=(self)"
+          "value": "gamepad=(self), hid=(self)"
         }
       ]
     }

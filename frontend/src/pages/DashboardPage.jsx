@@ -17,6 +17,7 @@ import { isLiveKitEnabled } from "../services/livekit";
 import { publishLiveKitCommand } from "../services/livekitCommands";
 import { forwardSpeedMps } from "../services/speedProfile";
 import { useGamepadControl } from "../services/useGamepadControl";
+import { useHidGamepadControl } from "../services/useHidGamepadControl";
 import { useLiveKitRobot } from "../services/useLiveKitRobot";
 
 const OFFLINE_STATUS = {
@@ -182,7 +183,7 @@ function DashboardPage({ demoMode = false }) {
   const pressedMotionKeysRef = useRef(new Map());
   const analogVectorRef = useRef(null);
   const controlModeRef = useRef("manual");
-  const gamepadWasConnectedRef = useRef(false);
+  const controllerWasConnectedRef = useRef(false);
   const canMoveRef = useRef(false);
   const stopMotionRef = useRef(null);
   const pendingActionRef = useRef("");
@@ -679,65 +680,103 @@ function DashboardPage({ demoMode = false }) {
       }
     },
   });
+  const hidGamepad = useHidGamepadControl({
+    enabled: controlMode === "gamepad" && !gamepad.connected,
+    canMove,
+    onMotion: beginAnalogMotion,
+    onStop: stopMotion,
+  });
+  const controller = gamepad.connected ? gamepad : hidGamepad;
+  const controllerConnected = gamepad.connected || hidGamepad.connected;
+  const controllerSupported = gamepad.supported || hidGamepad.supported;
+  const controllerName = controllerConnected ? controller.name : "";
 
   useEffect(() => {
-    const wasConnected = gamepadWasConnectedRef.current;
-    gamepadWasConnectedRef.current = gamepad.connected;
+    const wasConnected = controllerWasConnectedRef.current;
+    controllerWasConnectedRef.current = controllerConnected;
 
-    if (!wasConnected && gamepad.connected) {
+    if (!wasConnected && controllerConnected) {
       controlModeRef.current = "gamepad";
       pressedMotionKeysRef.current.clear();
       stopMotion();
       setControlMode("gamepad");
       setStatusMessage(
-        `${gamepad.name} detectado automaticamente. Centralize os manches e use o controle.`,
+        `${controllerName} detectado automaticamente. Centralize os manches e use o controle.`,
       );
       return;
     }
 
-    if (wasConnected && !gamepad.connected && controlModeRef.current === "gamepad") {
+    if (wasConnected && !controllerConnected && controlModeRef.current === "gamepad") {
       controlModeRef.current = "manual";
       pressedMotionKeysRef.current.clear();
       stopMotion();
       setControlMode("manual");
       setStatusMessage("Controle USB desconectado. Botões e teclado reativados automaticamente.");
     }
-  }, [gamepad.connected, gamepad.name, stopMotion]);
+  }, [controllerConnected, controllerName, stopMotion]);
 
-  const gamepadTitle = !gamepad.supported
-    ? "Navegador sem suporte a gamepad"
+  const gamepadTitle = !controllerSupported
+    ? "Navegador sem suporte a controles USB"
     : !gamepad.secureContext
       ? "Controle USB exige acesso local seguro"
-      : gamepad.connected
-        ? `${gamepad.name} conectado`
+      : controllerConnected
+        ? `${controllerName} conectado`
         : "Nenhum controle USB detectado";
-  const gamepadDescription = !gamepad.supported
-    ? "Use uma versão atual do Chrome, Edge ou Firefox."
+  const gamepadDescription = !controllerSupported
+    ? "Use Chrome ou Edge atual; Firefox aceita apenas controles reconhecidos como gamepad."
     : !gamepad.secureContext
       ? "Abra o painel por http://localhost:5173 usando o túnel SSH."
-      : gamepad.connected
+      : controllerConnected
         ? controlMode === "gamepad"
-          ? gamepad.waitingForNeutral
+          ? controller.waitingForNeutral
             ? "Centralize os manches para liberar o movimento"
-            : gamepad.motionDetected
+            : controller.error
+              ? controller.error
+              : controller.motionDetected
               ? "Entrada analógica reconhecida pelo navegador"
-              : "Modo USB ativo · mova um manche para testar"
+              : hidGamepad.connected && !gamepad.connected
+                ? "HID genérico autorizado · mova um manche para testar"
+                : "Modo USB ativo · mova um manche para testar"
           : "Conectado · Botões foi selecionado manualmente"
-        : "Conecte o cabo; ao primeiro botão ou manche, o modo USB será ativado.";
+        : hidGamepad.error
+          ? hidGamepad.error
+          : hidGamepad.supported
+            ? "Conecte e pressione um botão; se não detectar, clique em Controle USB para identificar."
+            : "Conecte o cabo e pressione qualquer botão ou manche.";
 
-  function selectControlMode(nextMode) {
-    if (nextMode === controlMode) return;
-    controlModeRef.current = nextMode;
-    pressedMotionKeysRef.current.clear();
-    stopMotion();
-    setControlMode(nextMode);
-    setStatusMessage(
-      nextMode === "gamepad"
-        ? gamepad.connected
-          ? "Controle USB selecionado. Centralize os manches para liberar o movimento."
-          : "Modo USB selecionado. Conecte o controle e pressione qualquer botão."
-        : "Botões e teclado selecionados para o movimento.",
-    );
+  async function selectControlMode(nextMode) {
+    const needsHidIdentification =
+      nextMode === "gamepad" && !controllerConnected && hidGamepad.supported;
+    if (nextMode !== controlMode) {
+      controlModeRef.current = nextMode;
+      pressedMotionKeysRef.current.clear();
+      stopMotion();
+      setControlMode(nextMode);
+      setStatusMessage(
+        nextMode === "gamepad"
+          ? controllerConnected
+            ? "Controle USB selecionado. Centralize os manches para liberar o movimento."
+            : needsHidIdentification
+              ? "Selecione seu controle USB na janela do navegador."
+              : "Modo USB selecionado. Conecte o controle e pressione qualquer botão."
+          : "Botões e teclado selecionados para o movimento.",
+      );
+    } else if (!needsHidIdentification) {
+      return;
+    }
+
+    if (needsHidIdentification) {
+      const device = await hidGamepad.requestDevice();
+      if (device) {
+        setStatusMessage(
+          `${device.productName || "Controle genérico"} identificado. Nas próximas conexões ele será automático.`,
+        );
+      } else if (!controllerWasConnectedRef.current) {
+        controlModeRef.current = "manual";
+        setControlMode("manual");
+        setStatusMessage("Nenhum controle foi selecionado. Botões e teclado continuam ativos.");
+      }
+    }
   }
 
   return (
@@ -806,8 +845,8 @@ function DashboardPage({ demoMode = false }) {
             <div className="mobile-camera-controls" aria-label="Controles de teleoperação">
                 <ControlModeSelector
                   mode={controlMode}
-                  gamepadConnected={gamepad.connected}
-                  gamepadAvailable={gamepad.supported && gamepad.secureContext}
+                  gamepadConnected={controllerConnected}
+                  gamepadAvailable={controllerSupported && gamepad.secureContext}
                   mobile
                   onSelect={selectControlMode}
                 />
@@ -815,9 +854,9 @@ function DashboardPage({ demoMode = false }) {
                   disabled={!canMove || controlMode !== "manual"}
                   disabledLabel={
                     controlMode === "gamepad"
-                      ? gamepad.waitingForNeutral
+                      ? controller.waitingForNeutral
                         ? "CENTRALIZE"
-                        : gamepad.motionDetected ? "USB DETECTADO" : "MODO USB"
+                        : controller.motionDetected ? "USB DETECTADO" : "MODO USB"
                       : "BLOQUEADO"
                   }
                   activeCommand={activeCommand}
@@ -1032,12 +1071,12 @@ function DashboardPage({ demoMode = false }) {
               </div>
               <ControlModeSelector
                 mode={controlMode}
-                gamepadConnected={gamepad.connected}
-                gamepadAvailable={gamepad.supported && gamepad.secureContext}
+                gamepadConnected={controllerConnected}
+                gamepadAvailable={controllerSupported && gamepad.secureContext}
                 onSelect={selectControlMode}
               />
               <div
-                className={`gamepad-status ${gamepad.connected ? "is-connected" : ""} ${controlMode === "gamepad" ? "is-selected" : ""}`}
+                className={`gamepad-status ${controllerConnected ? "is-connected" : ""} ${controlMode === "gamepad" ? "is-selected" : ""}`}
                 role="status"
               >
                 <span className="gamepad-status__icon" aria-hidden="true">🎮</span>
@@ -1045,11 +1084,13 @@ function DashboardPage({ demoMode = false }) {
                   <strong>{gamepadTitle}</strong>
                   <small>{gamepadDescription}</small>
                 </div>
-                {gamepad.connected && (
+                {controllerConnected && (
                   <b>
                     {controlMode === "gamepad"
                       ? "ATIVO"
-                      : gamepad.standardMapping ? "PRONTO" : "COMPATÍVEL"}
+                      : hidGamepad.connected && !gamepad.connected
+                        ? "HID"
+                        : gamepad.standardMapping ? "PRONTO" : "COMPATÍVEL"}
                   </b>
                 )}
               </div>
@@ -1096,11 +1137,11 @@ function DashboardPage({ demoMode = false }) {
                   {activeCommand
                     ? MOVEMENT_LABELS[activeCommand]
                     : controlMode === "gamepad"
-                      ? gamepad.waitingForNeutral
+                      ? controller.waitingForNeutral
                         ? "CENTRALIZE OS MANCHES"
-                        : gamepad.motionDetected
+                        : controller.motionDetected
                           ? "EIXOS DETECTADOS"
-                          : gamepad.connected ? "USB PRONTO" : "AGUARDANDO USB"
+                          : controllerConnected ? "USB PRONTO" : "AGUARDANDO USB"
                       : canMove ? "BOTÕES PRONTOS" : "BLOQUEADO"}
                 </small>
               </div>
