@@ -112,14 +112,6 @@ function LoginPage() {
             >
               {isSubmitting ? "Entrando..." : "Entrar"}
             </button>
-
-            <button
-              className="login-demo-button"
-              type="button"
-              onClick={() => navigate("/demo")}
-            >
-              Acessar demonstração
-            </button>
           </form>
         </section>
       </main>

@@ -79,7 +79,7 @@ echo "Construindo o frontend React da Bianca para http://$WEB_IP:5173 ..."
 "${DOCKER[@]}" build \
   --build-arg "VITE_SUPABASE_URL=$SUPABASE_URL" \
   --build-arg "VITE_SUPABASE_PUBLISHABLE_KEY=$SUPABASE_KEY" \
-  --build-arg "VITE_API_URL=http://$WEB_IP:8000" \
+  --build-arg "VITE_API_URL=/" \
   -t go2-integrated-frontend:local \
   "$ROOT/frontend"
 
@@ -139,6 +139,7 @@ echo
 echo "============================================================"
 echo " Painel Go2:  http://$WEB_IP:5173"
 echo " FastAPI:     http://$WEB_IP:8000/docs"
+echo " Gamepad USB: use http://localhost:5173 via túnel SSH no notebook"
 echo " Supabase:    validado antes da inicialização"
 echo " Para parar:  Ctrl+C"
 echo "============================================================"

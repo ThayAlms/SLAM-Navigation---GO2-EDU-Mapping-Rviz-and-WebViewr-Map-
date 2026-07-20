@@ -58,4 +58,6 @@ gst-launch-1.0 -q -e \
   ! flvmux streamable=true \
   ! fdsink fd=1 \
   | "$FFMPEG_BIN" -hide_banner -loglevel warning -fflags nobuffer \
-      -f flv -i pipe:0 -map 0:v:0 -c:v copy -an -f flv "$PUBLISH_URL"
+      -f flv -i pipe:0 -map 0:v:0 -c:v copy -an \
+      -rw_timeout "${LIVEKIT_RTMP_TIMEOUT_US:-15000000}" \
+      -f flv "$PUBLISH_URL"

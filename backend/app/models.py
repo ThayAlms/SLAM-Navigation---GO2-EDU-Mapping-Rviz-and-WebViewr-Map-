@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 
 class RobotCommandName(str, Enum):
+    MOVE_ANALOG = "move_analog"
     FORWARD = "forward"
     BACKWARD = "backward"
     ROTATE_LEFT = "rotate_left"

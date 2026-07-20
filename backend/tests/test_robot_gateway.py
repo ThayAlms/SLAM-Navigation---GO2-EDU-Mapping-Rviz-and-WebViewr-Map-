@@ -27,6 +27,10 @@ async def test_commands_are_mapped_to_gateway_routes(monkeypatch) -> None:
 
     monkeypatch.setattr(gateway, "_request", fake_request)
 
+    await gateway.execute(
+        "move_analog",
+        {"forward": 0.75, "lateral": -0.25, "yaw": 0.5},
+    )
     await gateway.execute("forward")
     await gateway.execute("stand_up")
     await gateway.execute("set_speed", {"percent": 35})
@@ -35,6 +39,11 @@ async def test_commands_are_mapped_to_gateway_routes(monkeypatch) -> None:
     await gateway.execute("emergency_stop")
 
     assert calls == [
+        (
+            "POST",
+            "/api/control/joystick",
+            {"forward": 0.75, "lateral": -0.25, "yaw": 0.5},
+        ),
         ("POST", "/api/control/move", {"command": "forward"}),
         ("POST", "/api/control/posture", {"command": "stand_up"}),
         ("POST", "/api/control/speed", {"percent": 35}),
@@ -57,6 +66,21 @@ async def test_obstacle_avoidance_requires_boolean_state() -> None:
             "set_obstacle_avoidance",
             {"enabled": "false"},
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"forward": 1.01, "lateral": 0, "yaw": 0},
+        {"forward": 0, "lateral": float("nan"), "yaw": 0},
+        {"forward": False, "lateral": 0, "yaw": 0},
+    ],
+)
+async def test_analog_move_rejects_invalid_axes(payload) -> None:
+    with pytest.raises(RobotGatewayRejected):
+        await make_gateway().execute("move_analog", payload)
 
 
 def test_gateway_status_is_normalized_for_frontend() -> None:

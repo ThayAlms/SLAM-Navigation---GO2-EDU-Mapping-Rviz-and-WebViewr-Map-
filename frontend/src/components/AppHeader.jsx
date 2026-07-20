@@ -87,7 +87,6 @@ function AppHeader({ showLogout = false, demoMode = false }) {
               <span className="header-menu-kicker">NAVEGAÇÃO</span>
               {showLogout ? (
                 <>
-                  <button type="button" onClick={() => navigateFromMenu("/dashboard")}>Painel de operação</button>
                   {user?.role === "admin" && (
                     <button type="button" onClick={() => navigateFromMenu(isUserManagement ? "/dashboard" : "/admin/usuarios")}>
                       {isUserManagement ? "Voltar à operação" : "Usuários e acessos"}
@@ -129,18 +128,6 @@ function AppHeader({ showLogout = false, demoMode = false }) {
             <img className="app-header-oracle-logo" src={oracleLogo} alt="Oracle" />
           </span>
         </div>
-
-        {isLogin && (
-          <div className="app-header-actions">
-            <button
-              type="button"
-              className="header-demo-button"
-              onClick={() => navigate("/demo")}
-            >
-              Ver demonstração
-            </button>
-          </div>
-        )}
 
         {!isLogin && <div className="app-header-actions">
           <button

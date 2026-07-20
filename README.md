@@ -38,8 +38,9 @@ O frontend antigo em HTML estático foi substituído pelo aplicativo React. O na
 | Localização atual | ✅ | `X`, `Y`, `Z` e `yaw` relativos à origem |
 | Salvar e reiniciar mapa | ✅ | PCD binário + JSON de metadados |
 | Teleoperação `WASD` | ✅ | Avançar, recuar e girar no próprio eixo |
+| Controles PS4/PS5/Xbox | ✅ | Gamepad API nativa, três eixos analógicos e botões do RC Unitree |
 | Levantar e deitar | ✅ | API Sport do Go2 |
-| Controle de velocidade | ✅ | Padrão em 100%, faixa de 10% a 100%, passos de 10% |
+| Controle de velocidade | ✅ | 100% equivale ao máximo publicado do Go2 EDU (aprox. 5 m/s em laboratório) |
 | Obstacle Avoidance | ✅ | Serviço `obstacles_avoid` do próprio Go2, ativável no painel |
 | Damping | ✅ | Modo oficial de amortecimento da API Sport do Go2 |
 | Fila para operação 4G | ✅ | Supabase `robot_commands` |
@@ -103,7 +104,8 @@ No SQL Editor do projeto Supabase, aplique em ordem:
 
 1. `supabase/migrations/202607150001_initial_schema.sql`;
 2. `supabase/migrations/202607150002_sync_auth_profiles.sql`;
-3. `supabase/migrations/202607160003_go2_control_commands.sql`.
+3. `supabase/migrations/202607160003_go2_control_commands.sql`;
+4. `supabase/migrations/202607200004_gamepad_control.sql`.
 
 Em **Authentication → Users**, crie manualmente a primeira conta e marque o e-mail como confirmado. Depois, no SQL Editor, torne-a administradora:
 
@@ -245,8 +247,32 @@ Depois do login, o usuário comum entra diretamente nos recursos operacionais pe
 | `−` / `+` | ajustar velocidade segura |
 | Damping | acionar o modo oficial de amortecimento da Unitree |
 | Ativar / Desativar Obstacle Avoidance | alternar e confirmar o estado do serviço nativo |
+| Manche esquerdo USB | frente/ré e deslocamento lateral analógico |
+| Manche direito USB | giro analógico |
+| `START`/`Options` | habilitar o canal de controle |
+| `L2 + B`/Círculo | damping de emergência |
+| `L2 + X`/Quadrado | levantar |
+| `L2 + A`/Cruz | alternar entre levantar e deitar |
+| `X`/Quadrado | ligar Obstacle Avoidance |
+| `Y`/Triângulo por 3 s | desligar Obstacle Avoidance |
 
 Para mover, o operador precisa habilitar o controle, o robô precisa estar em pé e o estado solicitado do Obstacle Avoidance precisa estar confirmado. Um heartbeat é enviado enquanto a tecla permanece pressionada; ao soltar a tecla o painel envia parada imediatamente e o watchdog do gateway aplica uma segunda parada em até `0,25 s` se os comandos cessarem.
+
+Para usar um controle conectado por cabo ao notebook, inicie `./run_web.sh` na
+Jetson e, em outro terminal do notebook, crie o túnel local exigido pela
+segurança da Gamepad API:
+
+```bash
+ssh -N -L 5173:127.0.0.1:5173 unitree@IP-DA-JETSON
+```
+
+Abra `http://localhost:5173`, conecte o controle e pressione qualquer botão.
+Desconexão do cabo, perda de foco, troca de aba e soltura dos manches acionam
+parada. Para o primeiro teste físico, reduza o painel para 10% antes de
+habilitar o controle. A Unitree especifica o Go2 EDU em `0–3,7 m/s`, com
+máximo aproximado de `5 m/s` medido em laboratório; o perfil de 100% solicita
+esse máximo. O firmware pode aplicar limites adicionais conforme o modo de
+movimento, o anticolisão e as condições do ambiente.
 
 O cabeçalho apresenta as marcas XD4 Robotics e Oracle com o mesmo espaço visual. Os botões **Claro** e **Escuro** mudam o tema explicitamente e preservam a escolha no navegador.
 

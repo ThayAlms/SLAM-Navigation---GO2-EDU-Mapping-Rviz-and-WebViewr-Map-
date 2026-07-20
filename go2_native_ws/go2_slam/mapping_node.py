@@ -34,6 +34,19 @@ from std_srvs.srv import Trigger
 from unitree_api.msg import Request, Response
 from unitree_go.msg import SportModeState
 
+from motion_profile import (
+    DEFAULT_SPEED_PERCENT,
+    MAX_FORWARD_SPEED_MPS,
+    MAX_LATERAL_SPEED_MPS,
+    MAX_REVERSE_SPEED_MPS,
+    MAX_SPEED_PERCENT,
+    MAX_YAW_SPEED_RADPS,
+    MIN_SPEED_PERCENT,
+    MOTION_PROFILES,
+    SPEED_STEP_PERCENT,
+    analog_velocity,
+)
+
 DAMP_API_ID = 1001
 MOVE_API_ID = 1008
 STOP_API_ID = 1003
@@ -57,20 +70,6 @@ SENSOR_STATUS_TIMEOUT_SECONDS = 2.0
 ROBOT_STATUS_TIMEOUT_SECONDS = 2.0
 SPORT_STATE_STATUS_TIMEOUT_SECONDS = 2.0
 SPORT_STATE_SAFETY_TIMEOUT_SECONDS = 1.0
-DEFAULT_SPEED_PERCENT = 100
-MIN_SPEED_PERCENT = 10
-MAX_SPEED_PERCENT = 100
-SPEED_STEP_PERCENT = 10
-
-# Convenção do SDK: x é longitudinal, y é lateral e z é velocidade de yaw.
-# O recuo fica mais lento porque foi o movimento que apresentou instabilidade.
-MOTION_PROFILES = {
-    "forward": (0.40, 0.0, 0.0),
-    "backward": (-0.33, 0.0, 0.0),
-    "rotate_left": (0.0, 0.0, 0.55),
-    "rotate_right": (0.0, 0.0, -0.55),
-}
-
 SAFETY_REASON_MESSAGES = {
     "native_avoidance_unconfirmed": "anticolisão nativo ainda não confirmado",
     "avoidance_mode_unconfirmed": "modo do anticolisão ainda não confirmado",
@@ -175,7 +174,7 @@ class Go2MappingNode(Node):
         self._last_command_at = 0.0
         self._command_count = 0
         self._command_counts = {
-            command: 0 for command in MOTION_PROFILES
+            command: 0 for command in (*MOTION_PROFILES, "move_analog")
         }
         self._motion_publish_count = 0
         self._active_velocity = (0.0, 0.0, 0.0)
@@ -951,6 +950,13 @@ class Go2MappingNode(Node):
                 / MAX_SPEED_PERCENT,
                 3,
             ),
+            "lateral_speed_mps": round(
+                MAX_LATERAL_SPEED_MPS
+                * self._speed_percent
+                / MAX_SPEED_PERCENT,
+                3,
+            ),
+            "speed_profile": "go2_edu_native",
             "frame": self._map_frame,
             "slam_backend": "Go2 native LIO",
             "mapping_quality": "ok" if lio_connected else "degraded",
@@ -1193,10 +1199,19 @@ class Go2MappingNode(Node):
                     throttle_duration_sec=2.0,
                 )
                 return
-            # Limites técnicos do comando nativo no nível de 100%.
-            vx = max(-0.40, min(0.40, float(vx)))
-            vy = max(-0.30, min(0.30, float(vy)))
-            vyaw = max(-0.55, min(0.55, float(vyaw)))
+            # Limites técnicos publicados para o comando nativo do Go2 EDU.
+            vx = max(
+                -MAX_REVERSE_SPEED_MPS,
+                min(MAX_FORWARD_SPEED_MPS, float(vx)),
+            )
+            vy = max(
+                -MAX_LATERAL_SPEED_MPS,
+                min(MAX_LATERAL_SPEED_MPS, float(vy)),
+            )
+            vyaw = max(
+                -MAX_YAW_SPEED_RADPS,
+                min(MAX_YAW_SPEED_RADPS, float(vyaw)),
+            )
             safety_reason = self._movement_safety_reason(vx, vy, vyaw)
             if safety_reason:
                 raise RuntimeError(
@@ -1248,6 +1263,32 @@ class Go2MappingNode(Node):
             vy=velocity[1],
             vyaw=velocity[2],
         )
+
+    def move_analog(self, forward, lateral, yaw):
+        if self._safety_blocked:
+            raise RuntimeError(
+                "movimento bloqueado: %s; solte o controle antes de tentar novamente"
+                % SAFETY_REASON_MESSAGES.get(
+                    self._safety_block_reason, self._safety_block_reason
+                )
+            )
+        if self._posture_state != "standing":
+            raise RuntimeError(
+                "robô está deitado ou mudando de postura; use o botão LEVANTAR"
+            )
+        velocity = analog_velocity(
+            forward,
+            lateral,
+            yaw,
+            self._speed_percent,
+        )
+        self._last_command = "move_analog"
+        self._last_command_at = time.monotonic()
+        self._obstacle_stall_started_at = 0.0
+        self._command_count += 1
+        self._command_counts["move_analog"] += 1
+        self.move(vx=velocity[0], vy=velocity[1], vyaw=velocity[2])
+        return velocity
 
     def set_speed_percent(self, percent):
         try:

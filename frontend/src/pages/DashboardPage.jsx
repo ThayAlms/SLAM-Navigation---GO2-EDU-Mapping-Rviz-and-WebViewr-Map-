@@ -15,6 +15,7 @@ import {
 } from "../services/api";
 import { isLiveKitEnabled } from "../services/livekit";
 import { publishLiveKitCommand } from "../services/livekitCommands";
+import { useGamepadControl } from "../services/useGamepadControl";
 import { useLiveKitRobot } from "../services/useLiveKitRobot";
 
 const OFFLINE_STATUS = {
@@ -81,6 +82,7 @@ const MAP_REFRESH_INTERVAL_MS = 850;
 const MOTION_HEARTBEAT_MS = 80;
 
 const MOVEMENT_LABELS = {
+  gamepad: "CONTROLE USB",
   forward: "AVANÇANDO",
   backward: "RECUANDO",
   rotate_left: "GIRANDO À ESQUERDA",
@@ -129,6 +131,7 @@ function DashboardPage({ demoMode = false }) {
   const motionPointerRef = useRef(null);
   const activeCommandRef = useRef(null);
   const pressedMotionKeysRef = useRef(new Map());
+  const analogVectorRef = useRef(null);
   const canMoveRef = useRef(false);
   const stopMotionRef = useRef(null);
 
@@ -210,6 +213,7 @@ function DashboardPage({ demoMode = false }) {
     (sendStop = true) => {
       motionSessionRef.current += 1;
       motionPointerRef.current = null;
+      analogVectorRef.current = null;
       window.clearTimeout(motionTimerRef.current);
       motionTimerRef.current = null;
       activeCommandRef.current = null;
@@ -237,6 +241,47 @@ function DashboardPage({ demoMode = false }) {
         if (motionSessionRef.current !== motionSession) return;
         try {
           await dispatchRobotCommand(command, { duration_ms: 250 });
+          if (motionSessionRef.current === motionSession) {
+            motionTimerRef.current = window.setTimeout(pulse, MOTION_HEARTBEAT_MS);
+          }
+        } catch (error) {
+          if (motionSessionRef.current === motionSession) {
+            stopMotion();
+            setStatusMessage(error.message);
+          }
+        }
+      }
+
+      pulse();
+    },
+    [accessToken, demoMode, dispatchRobotCommand, stopMotion],
+  );
+
+  const beginAnalogMotion = useCallback(
+    (vector) => {
+      if ((!accessToken && !demoMode) || !canMoveRef.current) return;
+      if (activeCommandRef.current === "gamepad") {
+        analogVectorRef.current = vector;
+        return;
+      }
+
+      stopMotion(false);
+      analogVectorRef.current = vector;
+      const motionSession = motionSessionRef.current + 1;
+      motionSessionRef.current = motionSession;
+      setStatusMessage("");
+      activeCommandRef.current = "gamepad";
+      setActiveCommand("gamepad");
+
+      async function pulse() {
+        if (motionSessionRef.current !== motionSession) return;
+        const currentVector = analogVectorRef.current;
+        if (!currentVector) return;
+        try {
+          await dispatchRobotCommand("move_analog", {
+            ...currentVector,
+            duration_ms: 250,
+          });
           if (motionSessionRef.current === motionSession) {
             motionTimerRef.current = window.setTimeout(pulse, MOTION_HEARTBEAT_MS);
           }
@@ -494,6 +539,57 @@ function DashboardPage({ demoMode = false }) {
         ? "CONTROLE HABILITADO"
         : "CONFIRMANDO PROTEÇÃO"
       : "CONTROLE BLOQUEADO";
+  const gamepad = useGamepadControl({
+    canMove,
+    onMotion: beginAnalogMotion,
+    onStop: stopMotion,
+    onAction(action) {
+      if ((!accessToken && !demoMode) || pendingAction) return;
+      if (action === "arm" && !robotStatus.control_armed) {
+        handleAction("arm", {}, "Controle habilitado pelo gamepad.");
+      } else if (action === "damping") {
+        handleDamping();
+      } else if (action === "stand_up") {
+        handleAction("stand_up", {}, "Comando para levantar enviado pelo gamepad.");
+      } else if (action === "toggle_posture") {
+        const command = robotStatus.posture === "standing" ? "stand_down" : "stand_up";
+        handleAction(
+          command,
+          {},
+          command === "stand_up"
+            ? "Comando para levantar enviado pelo gamepad."
+            : "Comando para deitar enviado pelo gamepad.",
+        );
+      } else if (action === "avoidance_on" && !avoidanceRequested) {
+        handleAction(
+          "set_obstacle_avoidance",
+          { enabled: true },
+          "Ativação do anticolisão enviada pelo gamepad.",
+        );
+      } else if (action === "avoidance_off" && avoidanceRequested) {
+        handleAction(
+          "set_obstacle_avoidance",
+          { enabled: false },
+          "Desativação do anticolisão enviada pelo gamepad.",
+        );
+      }
+    },
+  });
+
+  const gamepadTitle = !gamepad.supported
+    ? "Navegador sem suporte a gamepad"
+    : !gamepad.secureContext
+      ? "Controle USB exige acesso local seguro"
+      : gamepad.connected
+        ? `${gamepad.name} conectado`
+        : "PS4, PS5 ou Xbox via USB";
+  const gamepadDescription = !gamepad.supported
+    ? "Use uma versão atual do Chrome, Edge ou Firefox."
+    : !gamepad.secureContext
+      ? "Abra o painel por http://localhost:5173 usando o túnel SSH."
+      : gamepad.connected
+        ? "Manche E: mover · manche D: girar · START/Options: habilitar"
+        : "Conecte o cabo e pressione qualquer botão para ativar.";
 
   return (
     <div className="app-layout">
@@ -768,8 +864,21 @@ function DashboardPage({ demoMode = false }) {
               <div className="teleoperation-card__header">
                 <div>
                   <strong>Movimento</strong>
-                  <small>WASD · mantenha pressionado</small>
+                  <small>WASD · controle USB analógico</small>
                 </div>
+              </div>
+              <div
+                className={`gamepad-status ${gamepad.connected ? "is-connected" : ""}`}
+                role="status"
+              >
+                <span className="gamepad-status__icon" aria-hidden="true">🎮</span>
+                <div>
+                  <strong>{gamepadTitle}</strong>
+                  <small>{gamepadDescription}</small>
+                </div>
+                {gamepad.connected && (
+                  <b>{gamepad.standardMapping ? "PADRÃO" : "COMPATÍVEL"}</b>
+                )}
               </div>
               <div className="teleoperation-pad" aria-label="Controle de movimentação">
                 <button
@@ -838,7 +947,12 @@ function DashboardPage({ demoMode = false }) {
                   onClick={() => handleAction("set_speed", { percent: higherSpeed }, `Velocidade ajustada para ${higherSpeed}%.`)}
                 >+</button>
               </div>
-              <small>Nível operacional · {speedMin}%–{speedMax}%</small>
+              <small>
+                Nível operacional · {speedMin}%–{speedMax}%
+                {Number.isFinite(robotStatus.linear_speed_mps)
+                  ? ` · até ${robotStatus.linear_speed_mps.toFixed(1)} m/s`
+                  : ""}
+              </small>
             </section>
           </div>
 

@@ -4,6 +4,7 @@
 import argparse
 import base64
 import json
+import math
 import os
 import re
 import signal
@@ -17,6 +18,7 @@ from uuid import UUID
 
 COMMAND_TOPIC = "go2.command"
 ALLOWED_COMMANDS = {
+    "move_analog",
     "forward",
     "backward",
     "rotate_left",
@@ -82,6 +84,22 @@ def validate_command(message, participant, now_ms=None):
 
 
 def gateway_action(command, payload):
+    if command == "move_analog":
+        axes = {}
+        for name in ("forward", "lateral", "yaw"):
+            value = payload.get(name)
+            if isinstance(value, bool):
+                raise ValueError("eixos do controle devem ficar entre -1 e 1")
+            try:
+                value = float(value)
+            except (TypeError, ValueError) as error:
+                raise ValueError(
+                    "eixos do controle devem ficar entre -1 e 1"
+                ) from error
+            if not math.isfinite(value) or not -1.0 <= value <= 1.0:
+                raise ValueError("eixos do controle devem ficar entre -1 e 1")
+            axes[name] = value
+        return "/api/control/joystick", axes
     if command in {"forward", "backward", "rotate_left", "rotate_right", "stop"}:
         return "/api/control/move", {"command": command}
     if command in {"stand_up", "stand_down"}:
@@ -193,7 +211,13 @@ def main():
                         payload,
                         args.timeout,
                     )
-                    if command not in {"forward", "backward", "rotate_left", "rotate_right"}:
+                    if command not in {
+                        "move_analog",
+                        "forward",
+                        "backward",
+                        "rotate_left",
+                        "rotate_right",
+                    }:
                         print("Comando executado: %s" % command, flush=True)
                 except (ValueError, HTTPError, URLError, TimeoutError, OSError) as error:
                     print("Comando recusado: %s" % error, flush=True)

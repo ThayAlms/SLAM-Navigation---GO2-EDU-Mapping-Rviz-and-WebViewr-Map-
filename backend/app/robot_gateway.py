@@ -1,5 +1,6 @@
 """Cliente assíncrono do gateway ROS que roda localmente na Jetson."""
 
+import math
 from typing import Any
 
 import httpx
@@ -90,6 +91,32 @@ class RobotGatewayClient:
         payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         payload = payload or {}
+        if command == "move_analog":
+            axes = {}
+            for name in ("forward", "lateral", "yaw"):
+                value = payload.get(name)
+                if isinstance(value, bool):
+                    raise RobotGatewayRejected(
+                        "Eixos do controle devem ficar entre -1 e 1."
+                    )
+                try:
+                    value = float(value)
+                except (TypeError, ValueError) as error:
+                    raise RobotGatewayRejected(
+                        "Eixos do controle devem ficar entre -1 e 1."
+                    ) from error
+                if not math.isfinite(value) or not -1.0 <= value <= 1.0:
+                    raise RobotGatewayRejected(
+                        "Eixos do controle devem ficar entre -1 e 1."
+                    )
+                axes[name] = value
+            return (
+                await self._request(
+                    "POST",
+                    "/api/control/joystick",
+                    json=axes,
+                )
+            ).json()
         if command in {
             "forward",
             "backward",

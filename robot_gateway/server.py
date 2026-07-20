@@ -203,6 +203,8 @@ class RobotGatewayHandler(BaseHTTPRequestHandler):
                 self._json({"ok": True, "armed": armed})
             elif path == "/api/control/move":
                 self._move(str(body.get("command", "stop")))
+            elif path == "/api/control/joystick":
+                self._joystick(body)
             elif path == "/api/control/posture":
                 self._posture(str(body.get("command", "")))
             elif path == "/api/control/speed":
@@ -259,6 +261,26 @@ class RobotGatewayHandler(BaseHTTPRequestHandler):
         else:
             self.runtime.node.move_command(command)
         self._json({"ok": True, "command": command})
+
+    def _joystick(self, body):
+        if not self.runtime.node._control_armed:
+            raise PermissionError("controle bloqueado; habilite-o antes de mover")
+        velocity = self.runtime.node.move_analog(
+            body.get("forward"),
+            body.get("lateral"),
+            body.get("yaw"),
+        )
+        self._json(
+            {
+                "ok": True,
+                "command": "move_analog",
+                "velocity": {
+                    "x": velocity[0],
+                    "y": velocity[1],
+                    "yaw": velocity[2],
+                },
+            }
+        )
 
     def _posture(self, command):
         actual = command
