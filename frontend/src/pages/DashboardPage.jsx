@@ -113,6 +113,44 @@ function speedMessage(percent) {
   return `Nível ${percent}% selecionado: limite frontal de ${speed} m/s.`;
 }
 
+function ControlModeSelector({
+  mode,
+  gamepadConnected,
+  gamepadAvailable,
+  mobile = false,
+  onSelect,
+}) {
+  return (
+    <div
+      className={`control-mode-selector ${mobile ? "control-mode-selector--mobile" : ""}`}
+      role="group"
+      aria-label="Fonte do controle de movimento"
+    >
+      <button
+        className={mode === "manual" ? "is-active" : ""}
+        type="button"
+        aria-pressed={mode === "manual"}
+        onClick={() => onSelect("manual")}
+      >
+        <span aria-hidden="true">⌨</span>
+        <strong>Botões</strong>
+      </button>
+      <button
+        className={mode === "gamepad" ? "is-active" : ""}
+        type="button"
+        aria-label={gamepadConnected ? "Controle USB conectado" : "Controle USB"}
+        aria-pressed={mode === "gamepad"}
+        disabled={!gamepadAvailable}
+        onClick={() => onSelect("gamepad")}
+      >
+        <span aria-hidden="true">🎮</span>
+        <strong>Controle USB</strong>
+        {gamepadConnected && <i aria-hidden="true" />}
+      </button>
+    </div>
+  );
+}
+
 function DashboardPage({ demoMode = false }) {
   const { session } = useAuth();
   const accessToken = session?.access_token;
@@ -128,6 +166,7 @@ function DashboardPage({ demoMode = false }) {
   const [isRequestingAnalysis, setIsRequestingAnalysis] = useState(false);
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [showOrientationHint, setShowOrientationHint] = useState(true);
+  const [controlMode, setControlMode] = useState("manual");
   const liveKit = useLiveKitRobot(demoMode ? null : accessToken);
   const liveKitRoom = liveKit.room;
   const userId = session?.user?.id;
@@ -142,6 +181,8 @@ function DashboardPage({ demoMode = false }) {
   const activeCommandRef = useRef(null);
   const pressedMotionKeysRef = useRef(new Map());
   const analogVectorRef = useRef(null);
+  const controlModeRef = useRef("manual");
+  const gamepadWasConnectedRef = useRef(false);
   const canMoveRef = useRef(false);
   const stopMotionRef = useRef(null);
   const pendingActionRef = useRef("");
@@ -158,6 +199,10 @@ function DashboardPage({ demoMode = false }) {
   useEffect(() => {
     canMoveRef.current = canMove;
   }, [canMove]);
+
+  useEffect(() => {
+    controlModeRef.current = controlMode;
+  }, [controlMode]);
 
   const dispatchRobotCommand = useCallback(
     (command, payload = {}) => {
@@ -241,7 +286,11 @@ function DashboardPage({ demoMode = false }) {
 
   const beginMotion = useCallback(
     (command) => {
-      if ((!accessToken && !demoMode) || !canMoveRef.current) return;
+      if (
+        controlModeRef.current !== "manual" ||
+        (!accessToken && !demoMode) ||
+        !canMoveRef.current
+      ) return;
       stopMotion(false);
       const motionSession = motionSessionRef.current + 1;
       motionSessionRef.current = motionSession;
@@ -271,7 +320,11 @@ function DashboardPage({ demoMode = false }) {
 
   const beginAnalogMotion = useCallback(
     (vector) => {
-      if ((!accessToken && !demoMode) || !canMoveRef.current) return;
+      if (
+        controlModeRef.current !== "gamepad" ||
+        (!accessToken && !demoMode) ||
+        !canMoveRef.current
+      ) return;
       if (activeCommandRef.current === "gamepad") {
         analogVectorRef.current = vector;
         return;
@@ -584,6 +637,7 @@ function DashboardPage({ demoMode = false }) {
         : "CONFIRMANDO PROTEÇÃO"
       : "CONTROLE BLOQUEADO";
   const gamepad = useGamepadControl({
+    enabled: controlMode === "gamepad",
     canMove,
     onMotion: beginAnalogMotion,
     onStop: stopMotion,
@@ -626,20 +680,65 @@ function DashboardPage({ demoMode = false }) {
     },
   });
 
+  useEffect(() => {
+    const wasConnected = gamepadWasConnectedRef.current;
+    gamepadWasConnectedRef.current = gamepad.connected;
+
+    if (!wasConnected && gamepad.connected) {
+      controlModeRef.current = "gamepad";
+      pressedMotionKeysRef.current.clear();
+      stopMotion();
+      setControlMode("gamepad");
+      setStatusMessage(
+        `${gamepad.name} detectado automaticamente. Centralize os manches e use o controle.`,
+      );
+      return;
+    }
+
+    if (wasConnected && !gamepad.connected && controlModeRef.current === "gamepad") {
+      controlModeRef.current = "manual";
+      pressedMotionKeysRef.current.clear();
+      stopMotion();
+      setControlMode("manual");
+      setStatusMessage("Controle USB desconectado. Botões e teclado reativados automaticamente.");
+    }
+  }, [gamepad.connected, gamepad.name, stopMotion]);
+
   const gamepadTitle = !gamepad.supported
     ? "Navegador sem suporte a gamepad"
     : !gamepad.secureContext
       ? "Controle USB exige acesso local seguro"
       : gamepad.connected
         ? `${gamepad.name} conectado`
-        : "Controle USB detectado automaticamente";
+        : "Nenhum controle USB detectado";
   const gamepadDescription = !gamepad.supported
     ? "Use uma versão atual do Chrome, Edge ou Firefox."
     : !gamepad.secureContext
       ? "Abra o painel por http://localhost:5173 usando o túnel SSH."
       : gamepad.connected
-        ? "Detectado automaticamente · START/Options habilita o robô"
-        : "Conecte o cabo e use o controle; nenhum programa é necessário.";
+        ? controlMode === "gamepad"
+          ? gamepad.waitingForNeutral
+            ? "Centralize os manches para liberar o movimento"
+            : gamepad.motionDetected
+              ? "Entrada analógica reconhecida pelo navegador"
+              : "Modo USB ativo · mova um manche para testar"
+          : "Conectado · Botões foi selecionado manualmente"
+        : "Conecte o cabo; ao primeiro botão ou manche, o modo USB será ativado.";
+
+  function selectControlMode(nextMode) {
+    if (nextMode === controlMode) return;
+    controlModeRef.current = nextMode;
+    pressedMotionKeysRef.current.clear();
+    stopMotion();
+    setControlMode(nextMode);
+    setStatusMessage(
+      nextMode === "gamepad"
+        ? gamepad.connected
+          ? "Controle USB selecionado. Centralize os manches para liberar o movimento."
+          : "Modo USB selecionado. Conecte o controle e pressione qualquer botão."
+        : "Botões e teclado selecionados para o movimento.",
+    );
+  }
 
   return (
     <div className="app-layout">
@@ -705,8 +804,22 @@ function DashboardPage({ demoMode = false }) {
             </div>
 
             <div className="mobile-camera-controls" aria-label="Controles de teleoperação">
+                <ControlModeSelector
+                  mode={controlMode}
+                  gamepadConnected={gamepad.connected}
+                  gamepadAvailable={gamepad.supported && gamepad.secureContext}
+                  mobile
+                  onSelect={selectControlMode}
+                />
                 <MobileJoystick
-                  disabled={!canMove}
+                  disabled={!canMove || controlMode !== "manual"}
+                  disabledLabel={
+                    controlMode === "gamepad"
+                      ? gamepad.waitingForNeutral
+                        ? "CENTRALIZE"
+                        : gamepad.motionDetected ? "USB DETECTADO" : "MODO USB"
+                      : "BLOQUEADO"
+                  }
                   activeCommand={activeCommand}
                   onCommandStart={beginMotion}
                   onCommandStop={stopMotion}
@@ -914,11 +1027,17 @@ function DashboardPage({ demoMode = false }) {
               <div className="teleoperation-card__header">
                 <div>
                   <strong>Movimento</strong>
-                  <small>WASD · controle USB analógico</small>
+                  <small>Escolha botões ou controle USB</small>
                 </div>
               </div>
+              <ControlModeSelector
+                mode={controlMode}
+                gamepadConnected={gamepad.connected}
+                gamepadAvailable={gamepad.supported && gamepad.secureContext}
+                onSelect={selectControlMode}
+              />
               <div
-                className={`gamepad-status ${gamepad.connected ? "is-connected" : ""}`}
+                className={`gamepad-status ${gamepad.connected ? "is-connected" : ""} ${controlMode === "gamepad" ? "is-selected" : ""}`}
                 role="status"
               >
                 <span className="gamepad-status__icon" aria-hidden="true">🎮</span>
@@ -927,14 +1046,18 @@ function DashboardPage({ demoMode = false }) {
                   <small>{gamepadDescription}</small>
                 </div>
                 {gamepad.connected && (
-                  <b>{gamepad.standardMapping ? "PADRÃO" : "COMPATÍVEL"}</b>
+                  <b>
+                    {controlMode === "gamepad"
+                      ? "ATIVO"
+                      : gamepad.standardMapping ? "PRONTO" : "COMPATÍVEL"}
+                  </b>
                 )}
               </div>
               <div className="teleoperation-pad" aria-label="Controle de movimentação">
                 <button
                   className={`teleoperation-key ${activeCommand === "forward" ? "is-active" : ""}`}
                   type="button"
-                  disabled={!canMove}
+                  disabled={!canMove || controlMode !== "manual"}
                   onPointerDown={(event) => handleMotionPointerDown(event, "forward")}
                   onPointerUp={handleMotionPointerEnd}
                   onPointerCancel={handleMotionPointerEnd}
@@ -944,7 +1067,7 @@ function DashboardPage({ demoMode = false }) {
                   <button
                     className={`teleoperation-key ${activeCommand === "rotate_left" ? "is-active" : ""}`}
                     type="button"
-                    disabled={!canMove}
+                    disabled={!canMove || controlMode !== "manual"}
                     onPointerDown={(event) => handleMotionPointerDown(event, "rotate_left")}
                     onPointerUp={handleMotionPointerEnd}
                     onPointerCancel={handleMotionPointerEnd}
@@ -953,7 +1076,7 @@ function DashboardPage({ demoMode = false }) {
                   <button
                     className={`teleoperation-key ${activeCommand === "backward" ? "is-active" : ""}`}
                     type="button"
-                    disabled={!canMove}
+                    disabled={!canMove || controlMode !== "manual"}
                     onPointerDown={(event) => handleMotionPointerDown(event, "backward")}
                     onPointerUp={handleMotionPointerEnd}
                     onPointerCancel={handleMotionPointerEnd}
@@ -962,14 +1085,24 @@ function DashboardPage({ demoMode = false }) {
                   <button
                     className={`teleoperation-key ${activeCommand === "rotate_right" ? "is-active" : ""}`}
                     type="button"
-                    disabled={!canMove}
+                    disabled={!canMove || controlMode !== "manual"}
                     onPointerDown={(event) => handleMotionPointerDown(event, "rotate_right")}
                     onPointerUp={handleMotionPointerEnd}
                     onPointerCancel={handleMotionPointerEnd}
                     onLostPointerCapture={handleMotionPointerEnd}
                   >D<span>↷</span></button>
                 </div>
-                <small>{activeCommand ? MOVEMENT_LABELS[activeCommand] : canMove ? "PRONTO" : "BLOQUEADO"}</small>
+                <small>
+                  {activeCommand
+                    ? MOVEMENT_LABELS[activeCommand]
+                    : controlMode === "gamepad"
+                      ? gamepad.waitingForNeutral
+                        ? "CENTRALIZE OS MANCHES"
+                        : gamepad.motionDetected
+                          ? "EIXOS DETECTADOS"
+                          : gamepad.connected ? "USB PRONTO" : "AGUARDANDO USB"
+                      : canMove ? "BOTÕES PRONTOS" : "BLOQUEADO"}
+                </small>
               </div>
             </section>
 

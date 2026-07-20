@@ -238,6 +238,8 @@ Depois do login, o usuário comum entra diretamente nos recursos operacionais pe
 
 | Entrada | Ação |
 | --- | --- |
+| **Botões** | seleciona botões, teclado e joystick da tela como fonte de movimento |
+| **Controle USB** | seleciona o gamepad físico como única fonte de movimento |
 | `W` ou `↑` | avançar |
 | `S` ou `↓` | recuar |
 | `A` ou `←` | girar à esquerda no próprio eixo |
@@ -268,7 +270,10 @@ normalizadas para o curso `−1…1` esperado pelo controle remoto; isso impede 
 20%, 30% e os demais níveis saturem e pareçam ter a mesma velocidade.
 
 Na versão publicada na Vercel, o operador só precisa abrir o painel HTTPS,
-conectar o controle ao notebook e pressionar qualquer botão ou manche. Não é
+conectar o controle ao notebook e pressionar qualquer botão ou manche. O painel
+seleciona **Controle USB** automaticamente; ao retirar o cabo, volta para
+**Botões**. O operador ainda pode selecionar Botões manualmente enquanto o
+controle permanece conectado. Não é
 necessário instalar aplicativo, driver adicional, executar comando ou calibrar
 o controle. O navegador normaliza automaticamente PS4, PS5, Xbox e Switch; o
 painel também adapta o layout DirectInput comum de Logitech, 8BitDo e controles
@@ -277,8 +282,15 @@ USB genéricos.
 Por proteção de privacidade da Gamepad API, o navegador só revela um controle à
 página após a primeira interação com um botão ou manche. O sistema operacional
 do notebook ainda precisa reconhecer o dispositivo USB; uma página web não tem
-permissão para instalar drivers. A habilitação por `START`/`Options` permanece
+permissão para instalar drivers. O modo inicial é **Botões**; ao detectar o USB,
+o painel envia uma parada, seleciona o controle e, antes de aceitar movimento,
+exige que os manches retornem ao centro. A habilitação por `START`/`Options` permanece
 intencional para impedir que conectar um controle mova o robô sozinho.
+
+O texto **Nenhum controle USB detectado** é o estado de espera. A conexão só
+está confirmada quando o painel troca esse texto pelo nome do dispositivo, por
+exemplo **Controle Xbox conectado**. Se o nome não aparecer depois de pressionar
+um botão, o navegador ainda não recebeu o dispositivo do sistema operacional.
 
 Para desenvolvimento local, inicie `./run_web.sh` na Jetson e, em outro terminal
 do notebook, crie o túnel local exigido pela segurança da Gamepad API:

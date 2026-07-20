@@ -9,7 +9,13 @@ function commandForOffset(x, y) {
   return y < 0 ? "forward" : "backward";
 }
 
-function MobileJoystick({ disabled, activeCommand, onCommandStart, onCommandStop }) {
+function MobileJoystick({
+  disabled,
+  disabledLabel = "BLOQUEADO",
+  activeCommand,
+  onCommandStart,
+  onCommandStop,
+}) {
   const surfaceRef = useRef(null);
   const pointerIdRef = useRef(null);
   const commandRef = useRef(null);
@@ -114,7 +120,7 @@ function MobileJoystick({ disabled, activeCommand, onCommandStart, onCommandStop
           aria-hidden="true"
         />
       </div>
-      <small>{activeCommand ? "MOVENDO" : disabled ? "BLOQUEADO" : "ARRASTE PARA MOVER"}</small>
+      <small>{activeCommand ? "MOVENDO" : disabled ? disabledLabel : "ARRASTE PARA MOVER"}</small>
     </div>
   );
 }

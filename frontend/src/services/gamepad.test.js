@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  firstConnectedGamepad,
   gamepadAxisBaselines,
   gamepadDisplayName,
   hasGamepadMotion,
@@ -31,6 +32,14 @@ function gamepad({
 test("ignora deriva dentro da zona morta", () => {
   assert.equal(shapeGamepadAxis(0.1), 0);
   assert.equal(shapeGamepadAxis(-0.14), 0);
+});
+
+test("ignora objetos residuais de controles USB desconectados", () => {
+  const disconnected = { ...gamepad({ id: "Antigo" }), connected: false };
+  const connected = { ...gamepad({ id: "Atual" }), connected: true };
+
+  assert.equal(firstConnectedGamepad([null, disconnected, connected]), connected);
+  assert.equal(firstConnectedGamepad([disconnected, null]), null);
 });
 
 test("reconhece gatilho analógico antes do clique completo", () => {

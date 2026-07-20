@@ -1383,3 +1383,45 @@
   background: rgba(20, 59, 76, 0.94) !important;
   opacity: 0.78 !important;
 }
+
+/* O seletor de fonte também permanece acessível quando a Central desktop é
+   substituída pelos controles sobre/abaixo da câmera. */
+@media (max-width: 767px) and (orientation: portrait) {
+  .video-panel > .mobile-camera-controls {
+    grid-template-rows: minmax(0, 1fr) auto !important;
+    min-height: 252px !important;
+  }
+
+  .video-panel .control-mode-selector--mobile {
+    position: static !important;
+    grid-column: 1 / -1 !important;
+    grid-row: 2 !important;
+    justify-self: center !important;
+    width: min(100%, 250px) !important;
+    min-width: 0 !important;
+    pointer-events: auto;
+  }
+}
+
+@media (orientation: landscape) and (max-width: 1199px) and (max-height: 560px) {
+  .video-panel .control-mode-selector--mobile {
+    position: absolute !important;
+    top: max(7px, env(safe-area-inset-top)) !important;
+    left: 50% !important;
+    z-index: 18 !important;
+    width: 190px !important;
+    min-width: 190px !important;
+    transform: translateX(-50%) !important;
+    pointer-events: auto;
+    background: rgba(8, 13, 18, 0.8) !important;
+    backdrop-filter: blur(7px);
+  }
+
+  :root[data-theme="light"] .video-panel .control-mode-selector--mobile {
+    background: rgba(250, 252, 253, 0.9) !important;
+  }
+
+  .video-panel .control-mode-selector--mobile > button {
+    min-height: 32px !important;
+  }
+}

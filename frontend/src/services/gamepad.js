@@ -149,6 +149,11 @@ export function hasGamepadMotion(vector) {
     .some((value) => Math.abs(value) > 0.0001);
 }
 
+export function firstConnectedGamepad(gamepads) {
+  return Array.from(gamepads || [])
+    .find((gamepad) => gamepad && gamepad.connected !== false) || null;
+}
+
 export function isGamepadButtonPressed(buttons, index) {
   const button = buttons?.[index];
   return Boolean(button?.pressed || button?.value > GAMEPAD_BUTTON_THRESHOLD);

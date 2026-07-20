@@ -46,7 +46,10 @@ ssh -N -L 5173:127.0.0.1:5173 unitree@IP_DA_JETSON
 ```
 
 Na Vercel, basta abrir o painel HTTPS, conectar o controle por cabo e pressionar
-qualquer botão ou manche. Chrome, Edge e Firefox atuais normalizam controles
+qualquer botão ou manche. O painel seleciona **Controle USB** automaticamente e,
+ao retirar o cabo, reativa **Botões**. A pessoa ainda pode escolher Botões com o
+controle conectado. Toda troca para o movimento e o USB só é liberado depois
+que os manches voltam ao centro. Chrome, Edge e Firefox atuais normalizam controles
 PS4/PS5/Xbox/Switch conhecidos; o painel adapta automaticamente também o layout
 DirectInput comum de Logitech, 8BitDo e controles USB genéricos. Não há
 instalação ou calibração manual. O túnel acima só é necessário no desenvolvimento

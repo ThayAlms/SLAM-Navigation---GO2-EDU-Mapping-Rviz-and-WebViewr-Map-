@@ -47,6 +47,94 @@
   --radius-button: 10px;
 }
 
+/* Fonte de teleoperação: somente uma entrada de movimento fica ativa. */
+.control-mode-selector {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  width: 100%;
+  padding: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.control-mode-selector > button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  min-height: 34px;
+  padding: 5px 7px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--color-text-muted);
+  background: transparent;
+  font-family: var(--font-secondary);
+  cursor: pointer;
+}
+
+.control-mode-selector > button strong {
+  overflow: hidden;
+  font-size: 9px;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.control-mode-selector > button.is-active {
+  border-color: rgba(42, 169, 224, 0.62);
+  color: var(--color-text);
+  background: rgba(42, 169, 224, 0.13);
+  box-shadow: 0 0 0 2px rgba(42, 169, 224, 0.05);
+}
+
+.control-mode-selector > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.control-mode-selector > button i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #58d39b;
+  box-shadow: 0 0 8px rgba(88, 211, 155, 0.65);
+}
+
+.gamepad-status.is-selected {
+  border-color: rgba(42, 169, 224, 0.52);
+  background: rgba(42, 169, 224, 0.08);
+}
+
+:root[data-theme="light"] .control-mode-selector {
+  background: rgba(34, 57, 70, 0.035);
+}
+
+:root[data-theme="light"] .control-mode-selector > button.is-active {
+  background: rgba(42, 169, 224, 0.11);
+}
+
+@media (max-width: 700px),
+  (orientation: landscape) and (max-width: 1199px) and (max-height: 560px) {
+  .control-mode-selector {
+    width: auto;
+    min-width: 176px;
+    padding: 3px;
+  }
+
+  .control-mode-selector > button {
+    min-height: 42px;
+    padding: 4px 6px;
+  }
+
+  .control-mode-selector > button strong {
+    font-size: 8px;
+  }
+}
+
 /* Controle USB nativo (Gamepad API): compacto para não competir com o pad. */
 .gamepad-status {
   display: grid;

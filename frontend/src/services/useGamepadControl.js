@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import {
+  firstConnectedGamepad,
   gamepadAxisBaselines,
   gamepadDisplayName,
   hasGamepadMotion,
@@ -18,6 +19,8 @@ const INITIAL_STATE = {
   connected: false,
   name: "",
   standardMapping: false,
+  motionDetected: false,
+  waitingForNeutral: false,
 };
 
 function initialState() {
@@ -32,13 +35,19 @@ function sameState(first, second) {
   return Object.keys(INITIAL_STATE).every((key) => first[key] === second[key]);
 }
 
-export function useGamepadControl({ canMove, onMotion, onStop, onAction }) {
+export function useGamepadControl({
+  enabled = true,
+  canMove,
+  onMotion,
+  onStop,
+  onAction,
+}) {
   const [state, setState] = useState(initialState);
-  const callbacksRef = useRef({ canMove, onMotion, onStop, onAction });
+  const callbacksRef = useRef({ enabled, canMove, onMotion, onStop, onAction });
 
   useEffect(() => {
-    callbacksRef.current = { canMove, onMotion, onStop, onAction };
-  }, [canMove, onAction, onMotion, onStop]);
+    callbacksRef.current = { enabled, canMove, onMotion, onStop, onAction };
+  }, [canMove, enabled, onAction, onMotion, onStop]);
 
   useEffect(() => {
     const supported = typeof navigator.getGamepads === "function";
@@ -56,10 +65,16 @@ export function useGamepadControl({ canMove, onMotion, onStop, onAction }) {
     let avoidanceOnSent = false;
     let pageActive = !document.hidden && document.hasFocus();
     let movementSuppressed = false;
+    let inputEnabled = false;
+    let publishedMotionDetected = false;
+    let publishedWaitingForNeutral = false;
 
     function publishState(gamepad) {
+      publishedMotionDetected = false;
+      publishedWaitingForNeutral = false;
       const nextState = gamepad
         ? {
+            ...INITIAL_STATE,
             supported: true,
             secureContext: true,
             connected: true,
@@ -70,6 +85,20 @@ export function useGamepadControl({ canMove, onMotion, onStop, onAction }) {
       setState((current) => sameState(current, nextState) ? current : nextState);
     }
 
+    function publishInputState(motionDetected, waitingForNeutral) {
+      if (
+        motionDetected === publishedMotionDetected &&
+        waitingForNeutral === publishedWaitingForNeutral
+      ) return;
+      publishedMotionDetected = motionDetected;
+      publishedWaitingForNeutral = waitingForNeutral;
+      setState((current) => ({
+        ...current,
+        motionDetected,
+        waitingForNeutral,
+      }));
+    }
+
     function stopGamepadMotion() {
       if (!isMoving) return;
       isMoving = false;
@@ -78,6 +107,14 @@ export function useGamepadControl({ canMove, onMotion, onStop, onAction }) {
 
     function rising(controls, control) {
       return Boolean(controls[control] && !previousControls[control]);
+    }
+
+    function resetActionTracking(controls = {}) {
+      previousControls = controls;
+      avoidanceOffStartedAt = null;
+      avoidanceOffSent = false;
+      avoidanceOnStartedAt = null;
+      avoidanceOnSent = false;
     }
 
     function readButtons(gamepad, now) {
@@ -165,7 +202,10 @@ export function useGamepadControl({ canMove, onMotion, onStop, onAction }) {
 
     function firstGamepad() {
       try {
-        return Array.from(navigator.getGamepads()).find(Boolean) || null;
+        // Chromium/Firefox podem manter temporariamente o objeto do controle
+        // no array mesmo depois de retirar o cabo. Nunca trate esse objeto
+        // residual como uma conexão ativa.
+        return firstConnectedGamepad(navigator.getGamepads());
       } catch {
         return null;
       }
@@ -178,8 +218,10 @@ export function useGamepadControl({ canMove, onMotion, onStop, onAction }) {
       if (!gamepad) {
         if (activeIndex !== null) {
           activeIndex = null;
-          previousControls = {};
+          inputEnabled = false;
+          resetActionTracking();
           axisBaselines = [];
+          publishInputState(false, false);
           publishState(null);
           stopGamepadMotion();
         }
@@ -189,9 +231,40 @@ export function useGamepadControl({ canMove, onMotion, onStop, onAction }) {
 
       if (gamepad.index !== activeIndex) {
         activeIndex = gamepad.index;
-        previousControls = {};
+        resetActionTracking();
         axisBaselines = gamepadAxisBaselines(gamepad);
         publishState(gamepad);
+      }
+
+      const layout = resolveGamepadLayout(gamepad);
+      const controls = readGamepadControls(gamepad, layout);
+      const vector = readGamepadMotion(
+        gamepad,
+        layout,
+        controls,
+        layout.kind === "generic" ? axisBaselines : null,
+      );
+
+      // A detecção do dispositivo continua ativa nos dois modos, mas nenhum
+      // comando do gamepad pode escapar enquanto o operador escolheu botões.
+      // Ao ativar ou retornar à aba, exigimos primeiro os manches em neutro.
+      if (!callbacksRef.current.enabled || !pageActive) {
+        inputEnabled = false;
+        movementSuppressed = true;
+        resetActionTracking(controls);
+        publishInputState(false, false);
+        stopGamepadMotion();
+        animationFrame = window.requestAnimationFrame(tick);
+        return;
+      }
+      if (!inputEnabled) {
+        inputEnabled = true;
+        movementSuppressed = hasGamepadMotion(vector);
+        resetActionTracking(controls);
+        publishInputState(movementSuppressed, movementSuppressed);
+        stopGamepadMotion();
+        animationFrame = window.requestAnimationFrame(tick);
+        return;
       }
 
       const input = readButtons(gamepad, now);
@@ -199,14 +272,15 @@ export function useGamepadControl({ canMove, onMotion, onStop, onAction }) {
         movementSuppressed = true;
         stopGamepadMotion();
       }
-      const vector = readGamepadMotion(
+      const activeVector = readGamepadMotion(
         gamepad,
         input.layout,
         input.controls,
         input.layout.kind === "generic" ? axisBaselines : null,
       );
-      const hasMotion = hasGamepadMotion(vector);
+      const hasMotion = hasGamepadMotion(activeVector);
       if (!hasMotion) movementSuppressed = false;
+      publishInputState(hasMotion, movementSuppressed && hasMotion);
       if (
         pageActive &&
         !movementSuppressed &&
@@ -214,7 +288,7 @@ export function useGamepadControl({ canMove, onMotion, onStop, onAction }) {
         callbacksRef.current.canMove
       ) {
         isMoving = true;
-        callbacksRef.current.onMotion(vector);
+        callbacksRef.current.onMotion(activeVector);
       } else {
         stopGamepadMotion();
       }
@@ -224,7 +298,7 @@ export function useGamepadControl({ canMove, onMotion, onStop, onAction }) {
     function handleConnected(event) {
       if (activeIndex === null) {
         activeIndex = event.gamepad.index;
-        previousControls = {};
+        resetActionTracking();
         axisBaselines = gamepadAxisBaselines(event.gamepad);
       }
       if (event.gamepad.index === activeIndex) publishState(event.gamepad);
@@ -233,14 +307,18 @@ export function useGamepadControl({ canMove, onMotion, onStop, onAction }) {
     function handleDisconnected(event) {
       if (event.gamepad.index !== activeIndex) return;
       activeIndex = null;
-      previousControls = {};
+      inputEnabled = false;
+      resetActionTracking();
       axisBaselines = [];
+      publishInputState(false, false);
       publishState(null);
       stopGamepadMotion();
     }
 
     function handleBlur() {
       pageActive = false;
+      inputEnabled = false;
+      publishInputState(false, false);
       stopGamepadMotion();
     }
 
@@ -250,7 +328,11 @@ export function useGamepadControl({ canMove, onMotion, onStop, onAction }) {
 
     function handleVisibility() {
       pageActive = !document.hidden && document.hasFocus();
-      if (!pageActive) stopGamepadMotion();
+      if (!pageActive) {
+        inputEnabled = false;
+        publishInputState(false, false);
+        stopGamepadMotion();
+      }
     }
 
     window.addEventListener("gamepadconnected", handleConnected);
