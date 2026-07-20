@@ -64,6 +64,8 @@ local.
 
 Ao soltar os manches, desconectar o cabo, trocar de aba ou perder o foco, o
 painel envia parada ao robô. A velocidade continua limitada pelo percentual
-selecionado no painel; 100% solicita o máximo publicado do Go2 EDU, de
-aproximadamente 5 m/s em condições de laboratório. O firmware pode aplicar
-limites adicionais conforme o modo de movimento e o ambiente.
+selecionado no painel. A curva progressiva produz `0,20 m/s` em 20%, `1,25 m/s`
+em 50% e mantém em 100% o máximo publicado do Go2 EDU, de aproximadamente 5 m/s
+em condições de laboratório. O transporte remoto é normalizado em `−1…1` para
+que nenhum nível intermediário sature. O firmware pode aplicar limites
+adicionais conforme o modo de movimento e o ambiente.

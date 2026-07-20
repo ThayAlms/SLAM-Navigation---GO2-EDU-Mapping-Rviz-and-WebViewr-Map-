@@ -1,4 +1,4 @@
-"""Escala de movimento equivalente ao comando nativo do Go2 EDU."""
+"""Escala progressiva de movimento para o comando nativo do Go2 EDU."""
 
 import math
 
@@ -24,6 +24,69 @@ MOTION_PROFILES = {
 }
 
 
+def speed_gain(speed_percent):
+    """Converte o nível escrito no painel em ganho progressivo reproduzível.
+
+    A curva quadrática preserva o máximo oficial em 100%, mas oferece controle
+    fino nos níveis baixos: 20% corresponde a 4% do máximo, ou 0,20 m/s para
+    frente. Isso evita que 20% resulte nos 1,0 m/s da antiga escala linear.
+    """
+    if isinstance(speed_percent, bool):
+        raise ValueError("percentual de velocidade inválido")
+    try:
+        selected = float(speed_percent)
+    except (TypeError, ValueError) as error:
+        raise ValueError("percentual de velocidade inválido") from error
+    if not math.isfinite(selected) or not 0 <= selected <= MAX_SPEED_PERCENT:
+        raise ValueError("percentual de velocidade inválido")
+    return (selected / MAX_SPEED_PERCENT) ** 2
+
+
+def velocity_limits(speed_percent):
+    """Retorna os limites exatos publicados para o nível selecionado."""
+    gain = speed_gain(speed_percent)
+    return {
+        "forward": MAX_FORWARD_SPEED_MPS * gain,
+        "reverse": MAX_REVERSE_SPEED_MPS * gain,
+        "lateral": MAX_LATERAL_SPEED_MPS * gain,
+        "yaw": MAX_YAW_SPEED_RADPS * gain,
+    }
+
+
+def remote_control_axes(vx, vy, vyaw):
+    """Normaliza velocidades físicas para a entrada remota −1…1 do Go2.
+
+    O transporte ``obstacles_avoid`` representa o curso do controle remoto.
+    Enviar diretamente 1–5 m/s fazia todos os níveis a partir de 20% saturarem
+    em 1, eliminando a diferença entre os botões de velocidade.
+    """
+    values = []
+    for value, name in ((vx, "vx"), (vy, "vy"), (vyaw, "vyaw")):
+        if isinstance(value, bool):
+            raise ValueError("%s deve ser uma velocidade válida" % name)
+        try:
+            selected = float(value)
+        except (TypeError, ValueError) as error:
+            raise ValueError("%s deve ser uma velocidade válida" % name) from error
+        if not math.isfinite(selected):
+            raise ValueError("%s deve ser uma velocidade válida" % name)
+        values.append(selected)
+
+    vx, vy, vyaw = values
+    longitudinal_limit = (
+        MAX_FORWARD_SPEED_MPS if vx >= 0 else MAX_REVERSE_SPEED_MPS
+    )
+
+    def clamp_axis(value, limit):
+        return max(-1.0, min(1.0, value / limit))
+
+    return (
+        clamp_axis(vx, longitudinal_limit),
+        clamp_axis(vy, MAX_LATERAL_SPEED_MPS),
+        clamp_axis(vyaw, MAX_YAW_SPEED_RADPS),
+    )
+
+
 def normalized_axis(value, name):
     if isinstance(value, bool):
         raise ValueError("eixo %s deve ficar entre -1 e 1" % name)
@@ -41,11 +104,7 @@ def analog_velocity(forward, lateral, yaw, speed_percent):
     forward = normalized_axis(forward, "forward")
     lateral = normalized_axis(lateral, "lateral")
     yaw = normalized_axis(yaw, "yaw")
-    speed_percent = float(speed_percent)
-    if not math.isfinite(speed_percent) or not 0 <= speed_percent <= 100:
-        raise ValueError("percentual de velocidade inválido")
-
-    scale = speed_percent / MAX_SPEED_PERCENT
+    scale = speed_gain(speed_percent)
     forward_limit = (
         MAX_FORWARD_SPEED_MPS
         if forward >= 0

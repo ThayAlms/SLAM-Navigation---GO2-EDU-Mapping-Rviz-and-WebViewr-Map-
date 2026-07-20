@@ -260,6 +260,13 @@ Depois do login, o usuário comum entra diretamente nos recursos operacionais pe
 
 Para mover, o operador precisa habilitar o controle, o robô precisa estar em pé e o estado solicitado do Obstacle Avoidance precisa estar confirmado. Um heartbeat é enviado enquanto a tecla permanece pressionada; ao soltar a tecla o painel envia parada imediatamente e o watchdog do gateway aplica uma segunda parada em até `0,25 s` se os comandos cessarem.
 
+Os botões `−/+` selecionam níveis exatos de 10% a 100%. O ganho é progressivo
+para permitir manobras próximas sem perder o máximo: 20% limita o comando
+frontal a `0,20 m/s`, 50% a `1,25 m/s` e 100% mantém o máximo de laboratório de
+`5,00 m/s`. Antes de chegar ao serviço `obstacles_avoid`, as velocidades são
+normalizadas para o curso `−1…1` esperado pelo controle remoto; isso impede que
+20%, 30% e os demais níveis saturem e pareçam ter a mesma velocidade.
+
 Na versão publicada na Vercel, o operador só precisa abrir o painel HTTPS,
 conectar o controle ao notebook e pressionar qualquer botão ou manche. Não é
 necessário instalar aplicativo, driver adicional, executar comando ou calibrar

@@ -15,6 +15,7 @@ import {
 } from "../services/api";
 import { isLiveKitEnabled } from "../services/livekit";
 import { publishLiveKitCommand } from "../services/livekitCommands";
+import { forwardSpeedMps } from "../services/speedProfile";
 import { useGamepadControl } from "../services/useGamepadControl";
 import { useLiveKitRobot } from "../services/useLiveKitRobot";
 
@@ -104,6 +105,14 @@ function coordinate(value) {
   return Number.isFinite(value) ? `${value >= 0 ? "+" : ""}${value.toFixed(2)} m` : "--";
 }
 
+function speedMessage(percent) {
+  const speed = forwardSpeedMps(percent).toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return `Nível ${percent}% selecionado: limite frontal de ${speed} m/s.`;
+}
+
 function DashboardPage({ demoMode = false }) {
   const { session } = useAuth();
   const accessToken = session?.access_token;
@@ -115,6 +124,7 @@ function DashboardPage({ demoMode = false }) {
   );
   const [activeCommand, setActiveCommand] = useState(null);
   const [pendingAction, setPendingAction] = useState("");
+  const [requestedSpeed, setRequestedSpeed] = useState(null);
   const [isRequestingAnalysis, setIsRequestingAnalysis] = useState(false);
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [showOrientationHint, setShowOrientationHint] = useState(true);
@@ -134,6 +144,8 @@ function DashboardPage({ demoMode = false }) {
   const analogVectorRef = useRef(null);
   const canMoveRef = useRef(false);
   const stopMotionRef = useRef(null);
+  const pendingActionRef = useRef("");
+  const speedRequestTimerRef = useRef(null);
 
   const canMove = Boolean(
     robotStatus.sdk_connected &&
@@ -403,6 +415,9 @@ function DashboardPage({ demoMode = false }) {
 
   useEffect(() => () => {
     pressedMotionKeysRef.current.clear();
+    if (speedRequestTimerRef.current) {
+      window.clearTimeout(speedRequestTimerRef.current);
+    }
     stopMotionRef.current?.();
   }, []);
 
@@ -416,7 +431,8 @@ function DashboardPage({ demoMode = false }) {
   }, [canMove, robotStatus.safety_blocked, stopMotion]);
 
   async function handleAction(command, payload, successMessage) {
-    if ((!accessToken && !demoMode) || pendingAction) return;
+    if ((!accessToken && !demoMode) || pendingActionRef.current) return false;
+    pendingActionRef.current = command;
     stopMotion(false);
     setPendingAction(command);
     setStatusMessage("");
@@ -431,7 +447,11 @@ function DashboardPage({ demoMode = false }) {
           }
           if (command === "stand_down") return { ...current, posture: "lying" };
           if (command === "set_speed") {
-            return { ...current, speed_limit_percent: payload.percent };
+            return {
+              ...current,
+              speed_limit_percent: payload.percent,
+              linear_speed_mps: forwardSpeedMps(payload.percent),
+            };
           }
           if (command === "set_obstacle_avoidance") {
             return {
@@ -453,11 +473,30 @@ function DashboardPage({ demoMode = false }) {
       if (command === "save_map" && result?.result?.point_count) {
         setStatusMessage(`Mapa salvo com ${result.result.point_count.toLocaleString("pt-BR")} pontos.`);
       }
+      return true;
     } catch (error) {
       setStatusMessage(error.message);
+      return false;
     } finally {
+      pendingActionRef.current = "";
       setPendingAction("");
     }
+  }
+
+  async function handleSpeedChange(percent) {
+    if (speedRequestTimerRef.current) {
+      window.clearTimeout(speedRequestTimerRef.current);
+    }
+    setRequestedSpeed(percent);
+    const accepted = await handleAction("set_speed", { percent }, speedMessage(percent));
+    if (!accepted) {
+      setRequestedSpeed(null);
+      return;
+    }
+    speedRequestTimerRef.current = window.setTimeout(() => {
+      speedRequestTimerRef.current = null;
+      setRequestedSpeed(null);
+    }, 2_500);
   }
 
   async function handleOracleAnalysis() {
@@ -488,12 +527,15 @@ function DashboardPage({ demoMode = false }) {
   }
 
   const location = robotStatus.current_location;
-  const speed = robotStatus.speed_limit_percent;
+  const telemetrySpeed = robotStatus.speed_limit_percent;
+  const speed = requestedSpeed ?? telemetrySpeed;
   const speedMin = robotStatus.speed_min_percent;
   const speedMax = robotStatus.speed_max_percent;
   const speedStep = robotStatus.speed_step_percent;
   const lowerSpeed = Math.max(speedMin, speed - speedStep);
   const higherSpeed = Math.min(speedMax, speed + speedStep);
+  const selectedForwardSpeed = forwardSpeedMps(speed);
+
   const postureControlsDisabled =
     !robotStatus.sdk_connected || !robotStatus.control_armed || Boolean(pendingAction);
   const postureTransitioning = robotStatus.posture?.startsWith("transitioning_");
@@ -732,14 +774,14 @@ function DashboardPage({ demoMode = false }) {
                       type="button"
                       aria-label="Diminuir velocidade"
                       disabled={!robotStatus.sdk_connected || speed <= speedMin || Boolean(pendingAction)}
-                      onClick={() => handleAction("set_speed", { percent: lowerSpeed }, `Velocidade ajustada para ${lowerSpeed}%.`)}
+                      onClick={() => handleSpeedChange(lowerSpeed)}
                     >−</button>
-                    <strong>{speed}%</strong>
+                    <strong>{speed}% · {selectedForwardSpeed.toFixed(2)} m/s</strong>
                     <button
                       type="button"
                       aria-label="Aumentar velocidade"
                       disabled={!robotStatus.sdk_connected || speed >= speedMax || Boolean(pendingAction)}
-                      onClick={() => handleAction("set_speed", { percent: higherSpeed }, `Velocidade ajustada para ${higherSpeed}%.`)}
+                      onClick={() => handleSpeedChange(higherSpeed)}
                     >+</button>
                   </div>
 
@@ -944,7 +986,7 @@ function DashboardPage({ demoMode = false }) {
                   type="button"
                   aria-label="Diminuir velocidade"
                   disabled={!robotStatus.sdk_connected || speed <= speedMin || Boolean(pendingAction)}
-                  onClick={() => handleAction("set_speed", { percent: lowerSpeed }, `Velocidade ajustada para ${lowerSpeed}%.`)}
+                  onClick={() => handleSpeedChange(lowerSpeed)}
                 >−</button>
                 <strong>{speed}%</strong>
                 <button
@@ -952,14 +994,11 @@ function DashboardPage({ demoMode = false }) {
                   type="button"
                   aria-label="Aumentar velocidade"
                   disabled={!robotStatus.sdk_connected || speed >= speedMax || Boolean(pendingAction)}
-                  onClick={() => handleAction("set_speed", { percent: higherSpeed }, `Velocidade ajustada para ${higherSpeed}%.`)}
+                  onClick={() => handleSpeedChange(higherSpeed)}
                 >+</button>
               </div>
               <small>
-                Nível operacional · {speedMin}%–{speedMax}%
-                {Number.isFinite(robotStatus.linear_speed_mps)
-                  ? ` · até ${robotStatus.linear_speed_mps.toFixed(1)} m/s`
-                  : ""}
+                Nível operacional · {speedMin}%–{speedMax}% · comando frontal exato: {selectedForwardSpeed.toFixed(2)} m/s
               </small>
             </section>
           </div>

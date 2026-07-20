@@ -45,6 +45,9 @@ from motion_profile import (
     MOTION_PROFILES,
     SPEED_STEP_PERCENT,
     analog_velocity,
+    remote_control_axes,
+    speed_gain,
+    velocity_limits,
 )
 
 DAMP_API_ID = 1001
@@ -935,30 +938,18 @@ class Go2MappingNode(Node):
             "speed_max_percent": MAX_SPEED_PERCENT,
             "speed_step_percent": SPEED_STEP_PERCENT,
             "linear_speed_mps": round(
-                MOTION_PROFILES["forward"][0]
-                * self._speed_percent
-                / MAX_SPEED_PERCENT,
-                3,
+                velocity_limits(self._speed_percent)["forward"], 3
             ),
             "reverse_speed_mps": round(
-                abs(MOTION_PROFILES["backward"][0])
-                * self._speed_percent
-                / MAX_SPEED_PERCENT,
-                3,
+                velocity_limits(self._speed_percent)["reverse"], 3
             ),
             "yaw_speed_radps": round(
-                abs(MOTION_PROFILES["rotate_left"][2])
-                * self._speed_percent
-                / MAX_SPEED_PERCENT,
-                3,
+                velocity_limits(self._speed_percent)["yaw"], 3
             ),
             "lateral_speed_mps": round(
-                MAX_LATERAL_SPEED_MPS
-                * self._speed_percent
-                / MAX_SPEED_PERCENT,
-                3,
+                velocity_limits(self._speed_percent)["lateral"], 3
             ),
-            "speed_profile": "go2_edu_native",
+            "speed_profile": "go2_edu_progressive_v2",
             "frame": self._map_frame,
             "slam_backend": "Go2 native LIO",
             "mapping_quality": "ok" if lio_connected else "degraded",
@@ -1180,12 +1171,13 @@ class Go2MappingNode(Node):
             self._remote_source_confirmed_at = 0.0
 
     def _publish_remote_move(self, vx, vy, vyaw, noreply=False):
+        remote_x, remote_y, remote_yaw = remote_control_axes(vx, vy, vyaw)
         request = self._new_remote_request(
             REMOTE_MOVE_API_ID,
             {
-                "x": float(vx),
-                "y": float(vy),
-                "yaw": float(vyaw),
+                "x": remote_x,
+                "y": remote_y,
+                "yaw": remote_yaw,
                 "mode": 0,
             },
             noreply=noreply,
@@ -1247,7 +1239,7 @@ class Go2MappingNode(Node):
             raise RuntimeError(
                 "robô está deitado ou mudando de postura; use o botão LEVANTAR"
             )
-        scale = self._speed_percent / MAX_SPEED_PERCENT
+        scale = speed_gain(self._speed_percent)
         velocity = tuple(value * scale for value in profile)
         safety_reason = self._movement_safety_reason(*velocity)
         if safety_reason:
