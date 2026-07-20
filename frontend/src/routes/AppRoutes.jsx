@@ -21,6 +21,8 @@ function AppRoutes() {
         }
       />
 
+      <Route path="/demo" element={<DashboardPage demoMode />} />
+
       <Route
         path="/admin/usuarios"
         element={

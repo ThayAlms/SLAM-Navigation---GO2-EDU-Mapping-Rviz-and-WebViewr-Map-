@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import AppHeader from "../components/AppHeader";
+import MobileJoystick from "../components/MobileJoystick";
 import OracleButton from "../components/OracleButton";
 import PointCloudMap from "../components/PointCloudMap";
 import RobotCamera from "../components/RobotCamera";
@@ -45,6 +46,36 @@ const OFFLINE_STATUS = {
   remote_source_operational: false,
 };
 
+const DEMO_POINTS = Array.from({ length: 900 }, (_, index) => {
+  const ring = index % 90;
+  const layer = Math.floor(index / 90);
+  const angle = (ring / 90) * Math.PI * 2;
+  const radius = 2.1 + Math.sin(layer * 0.9 + angle * 3) * 0.34;
+  return [
+    Math.cos(angle) * radius,
+    Math.sin(angle) * radius,
+    layer * 0.12 + Math.sin(angle * 5) * 0.08,
+  ];
+}).flat();
+
+const DEMO_STATUS = {
+  ...OFFLINE_STATUS,
+  robot_online: true,
+  network_online: true,
+  sdk_connected: true,
+  gateway_connected: true,
+  camera_connected: true,
+  lio_connected: true,
+  posture: "standing",
+  point_count: DEMO_POINTS.length / 3,
+  current_location: { x: 0, y: 0, z: 0, yaw_deg: 0 },
+  current_pose: { x: 0, y: 0, z: 0.12, qx: 0, qy: 0, qz: 0, qw: 1 },
+  safety_mode: "interactive_demo",
+  safety_ready: true,
+  remote_source_confirmed: true,
+  remote_source_operational: true,
+};
+
 const STATUS_REFRESH_INTERVAL_MS = 1_000;
 const MAP_REFRESH_INTERVAL_MS = 850;
 const MOTION_HEARTBEAT_MS = 80;
@@ -71,20 +102,26 @@ function coordinate(value) {
   return Number.isFinite(value) ? `${value >= 0 ? "+" : ""}${value.toFixed(2)} m` : "--";
 }
 
-function DashboardPage() {
+function DashboardPage({ demoMode = false }) {
   const { session } = useAuth();
   const accessToken = session?.access_token;
   const [polledRobotStatus, setRobotStatus] = useState(OFFLINE_STATUS);
-  const [points, setPoints] = useState([]);
-  const [statusMessage, setStatusMessage] = useState("");
+  const [demoRobotStatus, setDemoRobotStatus] = useState(DEMO_STATUS);
+  const [points, setPoints] = useState(() => demoMode ? DEMO_POINTS : []);
+  const [statusMessage, setStatusMessage] = useState(
+    demoMode ? "Demonstração interativa: nenhum comando será enviado ao robô." : "",
+  );
   const [activeCommand, setActiveCommand] = useState(null);
   const [pendingAction, setPendingAction] = useState("");
   const [isRequestingAnalysis, setIsRequestingAnalysis] = useState(false);
-  const liveKit = useLiveKitRobot(accessToken);
+  const [isMapOpen, setIsMapOpen] = useState(false);
+  const [showOrientationHint, setShowOrientationHint] = useState(true);
+  const liveKit = useLiveKitRobot(demoMode ? null : accessToken);
   const liveKitRoom = liveKit.room;
   const userId = session?.user?.id;
-  const robotStatus =
-    isLiveKitEnabled && liveKit.telemetry
+  const robotStatus = demoMode
+    ? demoRobotStatus
+    : isLiveKitEnabled && liveKit.telemetry
       ? { ...OFFLINE_STATUS, ...liveKit.telemetry }
       : polledRobotStatus;
   const motionTimerRef = useRef(null);
@@ -109,15 +146,23 @@ function DashboardPage() {
 
   const dispatchRobotCommand = useCallback(
     (command, payload = {}) => {
+      if (demoMode) {
+        return Promise.resolve({
+          command,
+          payload,
+          status: "simulated",
+          result: { point_count: points.length / 3 },
+        });
+      }
       if (isLiveKitEnabled) {
         return publishLiveKitCommand(liveKitRoom, userId, command, payload);
       }
       return sendRobotCommand(accessToken, command, payload);
     },
-    [accessToken, liveKitRoom, userId],
+    [accessToken, demoMode, liveKitRoom, points.length, userId],
   );
   useEffect(() => {
-    if (!accessToken || isLiveKitEnabled) return undefined;
+    if (demoMode || !accessToken || isLiveKitEnabled) return undefined;
     let active = true;
 
     async function loadStatus() {
@@ -138,10 +183,10 @@ function DashboardPage() {
       active = false;
       window.clearInterval(intervalId);
     };
-  }, [accessToken]);
+  }, [accessToken, demoMode]);
 
   useEffect(() => {
-    if (!accessToken || isLiveKitEnabled) return undefined;
+    if (demoMode || !accessToken || isLiveKitEnabled) return undefined;
     let active = true;
 
     async function loadMap() {
@@ -159,7 +204,7 @@ function DashboardPage() {
       active = false;
       window.clearInterval(intervalId);
     };
-  }, [accessToken]);
+  }, [accessToken, demoMode]);
 
   const stopMotion = useCallback(
     (sendStop = true) => {
@@ -169,18 +214,18 @@ function DashboardPage() {
       motionTimerRef.current = null;
       activeCommandRef.current = null;
       setActiveCommand(null);
-      if (sendStop && accessToken) {
+      if (sendStop && (accessToken || demoMode)) {
         dispatchRobotCommand("stop").catch((error) => {
           setStatusMessage(error.message);
         });
       }
     },
-    [accessToken, dispatchRobotCommand],
+    [accessToken, demoMode, dispatchRobotCommand],
   );
 
   const beginMotion = useCallback(
     (command) => {
-      if (!accessToken || !canMoveRef.current) return;
+      if ((!accessToken && !demoMode) || !canMoveRef.current) return;
       stopMotion(false);
       const motionSession = motionSessionRef.current + 1;
       motionSessionRef.current = motionSession;
@@ -205,7 +250,7 @@ function DashboardPage() {
 
       pulse();
     },
-    [accessToken, dispatchRobotCommand, stopMotion],
+    [accessToken, demoMode, dispatchRobotCommand, stopMotion],
   );
 
   useEffect(() => {
@@ -326,13 +371,38 @@ function DashboardPage() {
   }, [canMove, robotStatus.safety_blocked, stopMotion]);
 
   async function handleAction(command, payload, successMessage) {
-    if (!accessToken || pendingAction) return;
+    if ((!accessToken && !demoMode) || pendingAction) return;
     stopMotion(false);
     setPendingAction(command);
     setStatusMessage("");
     try {
       const result = await dispatchRobotCommand(command, payload);
-      setStatusMessage(successMessage);
+      if (demoMode) {
+        setDemoRobotStatus((current) => {
+          if (command === "arm") return { ...current, control_armed: true };
+          if (command === "disarm") return { ...current, control_armed: false };
+          if (command === "stand_up") return { ...current, posture: "standing" };
+          if (command === "stand_down") return { ...current, posture: "lying" };
+          if (command === "set_speed") {
+            return { ...current, speed_limit_percent: payload.percent };
+          }
+          if (command === "set_obstacle_avoidance") {
+            return {
+              ...current,
+              obstacle_avoidance_enabled: payload.enabled,
+              obstacle_avoidance_requested: payload.enabled,
+              obstacle_avoidance_state_confirmed: true,
+              native_avoidance_confirmed: payload.enabled,
+            };
+          }
+          return current;
+        });
+        if (command === "reset_map") {
+          setPoints([]);
+          setDemoRobotStatus((current) => ({ ...current, point_count: 0 }));
+        }
+      }
+      setStatusMessage(demoMode ? `Demonstração · ${successMessage}` : successMessage);
       if (command === "save_map" && result?.result?.point_count) {
         setStatusMessage(`Mapa salvo com ${result.result.point_count.toLocaleString("pt-BR")} pontos.`);
       }
@@ -344,12 +414,16 @@ function DashboardPage() {
   }
 
   async function handleOracleAnalysis() {
-    if (!accessToken) return;
+    if (!accessToken && !demoMode) return;
     setIsRequestingAnalysis(true);
     setStatusMessage("");
     try {
-      await requestOracleAnalysis(accessToken);
-      setStatusMessage("Captura adicionada à fila de análise da Oracle.");
+      if (!demoMode) await requestOracleAnalysis(accessToken);
+      setStatusMessage(
+        demoMode
+          ? "Demonstração · captura simulada para análise da Oracle."
+          : "Captura adicionada à fila de análise da Oracle.",
+      );
     } catch (error) {
       setStatusMessage(error.message);
     } finally {
@@ -423,75 +497,161 @@ function DashboardPage() {
 
   return (
     <div className="app-layout">
-      <AppHeader showLogout />
+      <AppHeader showLogout={!demoMode} demoMode={demoMode} />
       <SlamBackground className="dashboard-slam-background" />
 
       <main className="dashboard-page">
+        {showOrientationHint && (
+          <aside className="orientation-hint" aria-label="Sugestão de orientação">
+            <span aria-hidden="true">↻</span>
+            <p><strong>Melhor em modo paisagem</strong> Gire o aparelho para ver a câmera e os comandos lado a lado.</p>
+            <button
+              className="orientation-hint__close"
+              type="button"
+              aria-label="Fechar sugestão de orientação"
+              onClick={() => setShowOrientationHint(false)}
+            >
+              ×
+            </button>
+          </aside>
+        )}
         <section className="dashboard-grid">
           <div className="operation-hud">
             <div className="operation-statuses" aria-label="Status da operação">
-              <span><i /> DADOS REAIS · LIDAR 3D</span>
+              <span><i /> {demoMode ? "DEMONSTRAÇÃO · LIDAR 3D" : "DADOS REAIS · LIDAR 3D"}</span>
               <span>ROBÔ · <strong className={robotStatus.robot_online ? "is-online" : "is-offline"}>{robotStatus.robot_online ? "ONLINE" : "OFFLINE"}</strong></span>
               <span>LIO + IMU · <strong className={robotStatus.lio_connected ? "is-online" : "is-offline"}>{robotStatus.lio_connected ? "ESTÁVEL" : "AGUARDANDO"}</strong></span>
               <span>CÂMERA · <strong className={robotStatus.camera_connected ? "is-online" : "is-offline"}>{robotStatus.camera_connected ? "AO VIVO" : "SEM SINAL"}</strong></span>
               <span>MAPA · <strong>{Number(robotStatus.point_count || 0).toLocaleString("pt-BR")} PTS</strong></span>
             </div>
-            <b>ARRASTE PARA GIRAR · ROLE PARA DAR ZOOM</b>
           </div>
           <article className="panel video-panel" aria-label="Câmera frontal">
             <div className="video-placeholder video-placeholder--live">
-              <RobotCamera
-                accessToken={accessToken}
-                connected={robotStatus.camera_connected}
-                liveKitRoom={liveKit.room}
-                liveKitConnectionState={liveKit.connectionState}
-                liveKitErrorMessage={liveKit.errorMessage}
-              />
+              {demoMode ? (
+                <div className="demo-empty-feed" aria-label="Câmera simulada">
+                  <span>DEMONSTRAÇÃO INTERATIVA</span>
+                  <strong>Câmera do GO2</strong>
+                  <small>Entre como operador para visualizar a transmissão ao vivo.</small>
+                </div>
+              ) : (
+                <RobotCamera
+                  accessToken={accessToken}
+                  connected={robotStatus.camera_connected}
+                  liveKitRoom={liveKit.room}
+                  liveKitConnectionState={liveKit.connectionState}
+                  liveKitErrorMessage={liveKit.errorMessage}
+                />
+              )}
               <div className="viewport-controls viewport-controls--camera">
                 <OracleButton
                   onClick={handleOracleAnalysis}
                   isLoading={isRequestingAnalysis}
-                  disabled={!robotStatus.camera_connected}
+                  disabled={!demoMode && !robotStatus.camera_connected}
                 />
-              </div>
-            </div>
-          </article>
-
-          <article className="panel navigation-panel" aria-label="Mapeamento tridimensional">
-            <div className="map-placeholder map-placeholder--live">
-              <PointCloudMap
-                points={isLiveKitEnabled ? liveKit.points : points}
-                pose={robotStatus.current_pose}
-              />
-              <div className="viewport-controls viewport-controls--map">
                 <button
-                  className="viewport-action"
+                  className="viewport-action viewport-action--map-toggle"
                   type="button"
-                  onClick={() => handleAction("reset_map", {}, "Novo mapa iniciado.")}
-                  disabled={!robotStatus.lio_connected || Boolean(pendingAction)}
+                  onClick={() => setIsMapOpen(true)}
                 >
-                  NOVO MAPA
-                </button>
-                <button
-                  className="viewport-action viewport-action--primary"
-                  type="button"
-                  onClick={() => handleAction("save_map", {}, "Mapa salvo.")}
-                  disabled={!robotStatus.lio_connected || Boolean(pendingAction)}
-                >
-                  SALVAR
+                  MAPA LIDAR
                 </button>
               </div>
             </div>
-            <div className="map-location">
-              <div><span>X</span><strong>{coordinate(location?.x)}</strong></div>
-              <div><span>Y</span><strong>{coordinate(location?.y)}</strong></div>
-              <div><span>Z</span><strong>{coordinate(location?.z)}</strong></div>
-              <div><span>YAW</span><strong>{Number.isFinite(location?.yaw_deg) ? `${location.yaw_deg.toFixed(1)}°` : "--"}</strong></div>
+
+            <div className="mobile-camera-controls" aria-label="Controles de teleoperação">
+                <MobileJoystick
+                  disabled={!canMove}
+                  activeCommand={activeCommand}
+                  onCommandStart={beginMotion}
+                  onCommandStop={stopMotion}
+                />
+
+                <div className="mobile-camera-actions">
+                  <button
+                    className={`mobile-arm-button ${robotStatus.control_armed ? "is-active" : ""}`}
+                    type="button"
+                    disabled={
+                      !robotStatus.sdk_connected ||
+                      Boolean(pendingAction) ||
+                      (!robotStatus.control_armed && !robotStatus.safety_ready)
+                    }
+                    onClick={() =>
+                      handleAction(
+                        robotStatus.control_armed ? "disarm" : "arm",
+                        {},
+                        robotStatus.control_armed ? "Controle bloqueado." : "Controle habilitado.",
+                      )
+                    }
+                  >
+                    {robotStatus.control_armed ? "Bloquear" : "Habilitar"}
+                  </button>
+
+                  <button
+                    className={`mobile-avoidance-button ${avoidanceRequested ? "is-active" : ""}`}
+                    type="button"
+                    aria-pressed={avoidanceRequested}
+                    disabled={!robotStatus.sdk_connected || Boolean(pendingAction)}
+                    onClick={() =>
+                      handleAction(
+                        "set_obstacle_avoidance",
+                        { enabled: !avoidanceRequested },
+                        avoidanceRequested
+                          ? "Desativação do anticolisão enviada."
+                          : "Ativação do anticolisão enviada.",
+                      )
+                    }
+                  >
+                    Anticolisão {avoidanceRequested ? "ON" : "OFF"}
+                  </button>
+
+                  <div className="mobile-posture-actions" aria-label="Ações de postura">
+                    <button
+                      className="ui-button ui-button--secondary"
+                      type="button"
+                      disabled={standUpDisabled}
+                      onClick={() => handleAction("stand_up", {}, "Comando para levantar enviado.")}
+                    >
+                      <span aria-hidden="true">↑</span> Levantar
+                    </button>
+                    <button
+                      className="ui-button ui-button--secondary"
+                      type="button"
+                      disabled={standDownDisabled}
+                      onClick={() => handleAction("stand_down", {}, "Comando para deitar enviado.")}
+                    >
+                      <span aria-hidden="true">↓</span> Deitar
+                    </button>
+                  </div>
+
+                  <div className="mobile-speed" aria-label={`Velocidade ${speed}%`}>
+                    <button
+                      type="button"
+                      aria-label="Diminuir velocidade"
+                      disabled={!robotStatus.sdk_connected || speed <= speedMin || Boolean(pendingAction)}
+                      onClick={() => handleAction("set_speed", { percent: lowerSpeed }, `Velocidade ajustada para ${lowerSpeed}%.`)}
+                    >−</button>
+                    <strong>{speed}%</strong>
+                    <button
+                      type="button"
+                      aria-label="Aumentar velocidade"
+                      disabled={!robotStatus.sdk_connected || speed >= speedMax || Boolean(pendingAction)}
+                      onClick={() => handleAction("set_speed", { percent: higherSpeed }, `Velocidade ajustada para ${higherSpeed}%.`)}
+                    >+</button>
+                  </div>
+
+                  <button
+                    className="ui-button ui-button--danger mobile-emergency"
+                    type="button"
+                    onClick={handleDamping}
+                    disabled={(!accessToken && !demoMode) || pendingAction === "damping"}
+                  >
+                    <span aria-hidden="true">■</span> Damping
+                  </button>
+                </div>
             </div>
           </article>
-        </section>
 
-        <section className="panel teleoperation-panel">
+          <section className="panel teleoperation-panel">
           <div className="panel-header teleoperation-heading">
             <div>
               <h2>Central de comandos</h2>
@@ -687,13 +847,56 @@ function DashboardPage() {
               className="ui-button ui-button--danger teleoperation-emergency"
               type="button"
               onClick={handleDamping}
-              disabled={!accessToken || pendingAction === "damping"}
+              disabled={(!accessToken && !demoMode) || pendingAction === "damping"}
             >
               <span aria-hidden="true">■</span> Damping
             </button>
           </div>
           {statusMessage && <p className="operation-message" role="status">{statusMessage}</p>}
+          </section>
         </section>
+
+        {isMapOpen && (
+          <section className="map-drawer" role="dialog" aria-label="Mapeamento tridimensional">
+            <article className="panel navigation-panel">
+              <div className="panel-header">
+                <div className="map-drawer-actions">
+                  <button
+                    className="viewport-action"
+                    type="button"
+                    onClick={() => handleAction("reset_map", {}, "Novo mapa iniciado.")}
+                    disabled={!robotStatus.lio_connected || Boolean(pendingAction)}
+                  >
+                    NOVO MAPA
+                  </button>
+                  <button
+                    className="viewport-action viewport-action--primary"
+                    type="button"
+                    onClick={() => handleAction("save_map", {}, "Mapa salvo.")}
+                    disabled={!robotStatus.lio_connected || Boolean(pendingAction)}
+                  >
+                    SALVAR
+                  </button>
+                </div>
+                <button className="viewport-action" type="button" onClick={() => setIsMapOpen(false)}>
+                  FECHAR
+                </button>
+              </div>
+              <div className="map-placeholder map-placeholder--live">
+                <PointCloudMap
+                  points={demoMode ? points : isLiveKitEnabled ? liveKit.points : points}
+                  pose={robotStatus.current_pose}
+                />
+              </div>
+              <div className="map-location">
+                <div><span>X</span><strong>{coordinate(location?.x)}</strong></div>
+                <div><span>Y</span><strong>{coordinate(location?.y)}</strong></div>
+                <div><span>Z</span><strong>{coordinate(location?.z)}</strong></div>
+                <div><span>YAW</span><strong>{Number.isFinite(location?.yaw_deg) ? `${location.yaw_deg.toFixed(1)}°` : "--"}</strong></div>
+              </div>
+            </article>
+          </section>
+        )}
       </main>
     </div>
   );

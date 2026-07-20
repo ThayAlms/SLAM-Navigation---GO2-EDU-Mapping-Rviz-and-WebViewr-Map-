@@ -1,0 +1,2427 @@
+/*
+ * Camada responsiva do painel de teleoperação.
+ * Mantém o contrato visual desktop (>= 1200px) e reorganiza a mesma
+ * marcação para tablet, retrato e celulares baixos em landscape.
+ */
+
+.orientation-hint,
+.mobile-controls-toggle,
+.mobile-camera-controls,
+.mobile-joystick,
+.mobile-posture-actions {
+  display: none;
+}
+
+@media (max-width: 1199px) {
+  html,
+  body,
+  #root,
+  .app-layout {
+    max-width: 100%;
+  }
+
+  html,
+  body {
+    overflow-x: clip;
+  }
+
+  .app-header-inner,
+  .app-header-partners,
+  .app-header-actions,
+  .dashboard-page,
+  .dashboard-grid,
+  .dashboard-grid > *,
+  .teleoperation-panel,
+  .teleoperation-grid,
+  .teleoperation-card {
+    min-width: 0;
+  }
+
+  .app-header-logo,
+  .app-header-oracle-logo {
+    width: auto;
+    object-fit: contain;
+  }
+
+  .dashboard-page {
+    padding: 16px;
+  }
+
+  .dashboard-grid {
+    gap: 14px;
+    padding-top: 0 !important;
+  }
+
+  .operation-hud {
+    position: static !important;
+    inset: auto !important;
+    width: 100%;
+  }
+
+  .operation-statuses {
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scroll-snap-type: inline proximity;
+    scrollbar-color: var(--color-brand-blue) transparent;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .operation-statuses > span {
+    scroll-snap-align: start;
+  }
+
+  .video-panel,
+  .teleoperation-panel {
+    min-height: 0 !important;
+  }
+
+  .video-placeholder {
+    min-width: 0;
+  }
+
+  .teleoperation-key,
+  .teleoperation-speed__button,
+  .teleoperation-posture button,
+  .teleoperation-emergency,
+  .mobile-controls-toggle {
+    touch-action: manipulation;
+  }
+
+  .teleoperation-key:focus-visible,
+  .teleoperation-speed__button:focus-visible,
+  .teleoperation-posture button:focus-visible,
+  .teleoperation-emergency:focus-visible,
+  .mobile-controls-toggle:focus-visible {
+    outline: 3px solid var(--color-brand-blue);
+    outline-offset: 2px;
+  }
+
+  .mobile-joystick__surface {
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+}
+
+/* Tablet: câmera e comandos lado a lado em landscape; blocos em portrait. */
+@media (min-width: 768px) and (max-width: 1199px) and (min-height: 561px) {
+  :root {
+    --header-height: 64px;
+  }
+
+  .app-header-inner {
+    padding-inline: max(20px, env(safe-area-inset-left));
+  }
+
+  .app-header-logo {
+    height: 30px;
+    max-height: 30px;
+  }
+
+  .app-header-oracle-logo {
+    position: static !important;
+    width: 90px !important;
+    max-width: 90px !important;
+    height: auto !important;
+    max-height: none !important;
+    transform: none !important;
+  }
+
+  .partner-logo-slot--oracle {
+    width: 90px !important;
+    height: 28px !important;
+    overflow: visible;
+  }
+
+  .dashboard-grid {
+    min-height: 0 !important;
+  }
+
+  .video-placeholder {
+    aspect-ratio: 16 / 9;
+    height: auto;
+    min-height: 0 !important;
+  }
+
+  .teleoperation-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  .teleoperation-card {
+    padding: 12px !important;
+    border-right: 1px solid var(--color-border) !important;
+    border-bottom: 0 !important;
+  }
+
+  .teleoperation-card:last-child {
+    border-right: 0 !important;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1199px) and (min-height: 561px) and (orientation: landscape) {
+  .dashboard-page {
+    height: calc(100dvh - var(--header-height));
+    padding-block: 14px;
+    overflow: hidden;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(330px, 390px) !important;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100%;
+  }
+
+  .operation-hud {
+    grid-column: 1 / -1;
+  }
+
+  .video-panel,
+  .teleoperation-panel {
+    height: 100%;
+    max-height: none !important;
+  }
+
+  .video-placeholder {
+    height: 100%;
+    aspect-ratio: auto;
+  }
+
+  .teleoperation-panel {
+    max-width: none;
+    overflow-y: auto;
+  }
+
+  .teleoperation-grid {
+    display: flex !important;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 8px !important;
+    overflow: visible;
+  }
+
+  .teleoperation-card {
+    position: static !important;
+    flex: 0 0 auto;
+    min-height: 0 !important;
+    padding: 10px !important;
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--color-border) !important;
+  }
+
+  .teleoperation-card--system,
+  .teleoperation-card--direction,
+  .teleoperation-card--response {
+    position: static !important;
+    inset: auto !important;
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  .teleoperation-arm-button,
+  .teleoperation-avoidance-button,
+  .teleoperation-posture button {
+    min-height: 44px;
+  }
+
+  .teleoperation-pad,
+  .teleoperation-pad__row {
+    grid-template-columns: repeat(3, 46px);
+    gap: 5px;
+  }
+
+  .teleoperation-key {
+    width: 46px;
+    height: 46px;
+  }
+
+  .teleoperation-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    flex: 0 0 auto;
+    margin-top: 8px;
+    padding: 8px 0 0;
+    background: var(--color-background);
+  }
+
+  .teleoperation-emergency {
+    width: 100% !important;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1199px) and (min-height: 561px) and (orientation: portrait) {
+  .dashboard-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .teleoperation-panel {
+    width: 100%;
+    max-width: none;
+    justify-self: stretch;
+  }
+}
+
+/* Telefones em retrato e telas baixas: navegação operacional compacta. */
+@media (max-width: 767px),
+  (orientation: landscape) and (max-width: 1199px) and (max-height: 560px) {
+  :root {
+    --header-height: 48px;
+  }
+
+  body {
+    min-height: 100dvh;
+  }
+
+  .app-layout {
+    min-height: 100dvh;
+  }
+
+  .app-header {
+    height: var(--header-height);
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .app-header-inner {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) 40px;
+    gap: 8px;
+    padding-right: max(8px, env(safe-area-inset-right));
+    padding-left: max(8px, env(safe-area-inset-left));
+  }
+
+  .header-menu,
+  .app-header-actions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .app-header-partners {
+    justify-self: center;
+    width: auto;
+    max-width: 100%;
+    gap: clamp(7px, 2vw, 12px);
+  }
+
+  .partner-logo-slot {
+    width: auto;
+    min-width: 0;
+  }
+
+  .app-header--authenticated .partner-logo-slot:first-child {
+    width: 106px !important;
+    height: 26px !important;
+    overflow: visible;
+  }
+
+  .app-header--authenticated .partner-logo-slot--oracle {
+    display: flex !important;
+    width: 86px !important;
+    height: 24px !important;
+    overflow: visible;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  .app-header-logo {
+    height: 22px;
+    max-height: 22px;
+  }
+
+  .app-header-oracle-logo {
+    height: 16px;
+    max-height: 16px;
+  }
+
+  .app-header--authenticated .app-header-oracle-logo {
+    position: static !important;
+    display: block !important;
+    width: 86px !important;
+    max-width: 86px !important;
+    height: auto !important;
+    max-height: none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: none !important;
+  }
+
+  .brand-divider {
+    flex: 0 0 1px;
+    width: 1px;
+    height: 18px;
+  }
+
+  .header-menu-trigger,
+  .theme-toggle {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+  }
+
+  .dashboard-page,
+  :root[data-theme="light"] .dashboard-page {
+    width: 100%;
+    padding: 8px max(8px, env(safe-area-inset-right)) 8px max(8px, env(safe-area-inset-left));
+  }
+
+  .dashboard-grid {
+    min-height: 0 !important;
+    margin: 0 !important;
+    gap: 8px;
+    border-radius: 14px !important;
+  }
+
+  .operation-hud {
+    height: auto !important;
+    min-height: 28px;
+    padding: 3px 6px !important;
+  }
+
+  .operation-statuses {
+    gap: 6px;
+    padding-bottom: 3px;
+  }
+
+  .operation-statuses > span,
+  :root[data-theme="light"] .operation-statuses > span {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 112px;
+    min-height: 26px !important;
+    padding: 0 8px !important;
+    font-size: 8px;
+  }
+
+  .video-panel {
+    padding: 0 !important;
+    overflow: hidden;
+  }
+
+  .video-placeholder,
+  :root[data-theme="light"] .dashboard-grid > .video-panel .video-placeholder {
+    width: 100%;
+    min-height: 0 !important;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 12px;
+  }
+
+  .viewport-controls {
+    right: 6px;
+    bottom: 6px;
+    gap: 5px;
+  }
+
+  .viewport-controls .oracle-button,
+  .viewport-action,
+  :root[data-theme="light"] .viewport-controls--camera .oracle-button {
+    width: auto;
+    min-width: 0;
+    min-height: 40px;
+    padding-inline: 9px;
+    font-size: 8px;
+  }
+
+  .teleoperation-panel,
+  :root[data-theme="light"] .teleoperation-panel {
+    position: relative;
+    width: 100%;
+    max-width: none;
+    min-height: 0 !important;
+    margin: 0;
+    padding: 6px !important;
+    gap: 6px;
+    overflow: hidden;
+  }
+
+  .teleoperation-heading,
+  .teleoperation-panel > .native-safety-status,
+  .teleoperation-card__header small,
+  .teleoperation-card > small,
+  .teleoperation-pad > small,
+  .teleoperation-panel > .operation-message {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    margin: -1px !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+  }
+
+  .mobile-controls-toggle {
+    z-index: 4;
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    min-height: 40px;
+    padding: 0 10px;
+    border: 1px solid var(--color-border-light);
+    color: var(--color-text);
+    background: var(--color-surface-dark);
+    font-size: 11px;
+    font-weight: 800;
+  }
+
+  .mobile-joystick {
+    z-index: 3;
+    display: grid;
+    justify-items: center;
+    gap: 3px;
+    width: 132px;
+  }
+
+  .mobile-joystick__surface {
+    position: relative;
+    width: 126px;
+    height: 126px;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 50%;
+    background: rgba(4, 9, 14, 0.26);
+    box-shadow: inset 0 0 28px rgba(42, 169, 224, 0.12);
+    backdrop-filter: blur(2px);
+  }
+
+  .mobile-joystick__axis {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+
+  .mobile-joystick__axis--vertical {
+    width: 1px;
+    height: 72%;
+  }
+
+  .mobile-joystick__axis--horizontal {
+    width: 72%;
+    height: 1px;
+  }
+
+  .mobile-joystick__knob {
+    position: absolute;
+    top: calc(50% - 25px);
+    left: calc(50% - 25px);
+    width: 50px;
+    height: 50px;
+    border: 2px solid rgba(255, 255, 255, 0.78);
+    border-radius: 50%;
+    background: rgba(42, 169, 224, 0.52);
+    box-shadow: 0 5px 18px rgba(0, 0, 0, 0.26);
+    transition: transform 80ms linear;
+    pointer-events: none;
+  }
+
+  .mobile-joystick__label {
+    position: absolute;
+    z-index: 1;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 9px;
+    font-weight: 900;
+    line-height: 1;
+    pointer-events: none;
+  }
+
+  .mobile-joystick__label b {
+    color: var(--color-brand-blue);
+    font-size: 10px;
+  }
+
+  .mobile-joystick__label--up { top: 8px; left: 50%; transform: translateX(-50%); }
+  .mobile-joystick__label--left { top: 50%; left: 8px; transform: translateY(-50%); }
+  .mobile-joystick__label--down { bottom: 8px; left: 50%; transform: translateX(-50%); }
+  .mobile-joystick__label--right { top: 50%; right: 8px; transform: translateY(-50%); }
+
+  .mobile-joystick > small {
+    color: rgba(255, 255, 255, 0.82);
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-shadow: 0 1px 3px #000;
+  }
+
+  .mobile-joystick.is-disabled {
+    filter: grayscale(0.9);
+    opacity: 0.5;
+  }
+
+  :root[data-theme="light"] .mobile-joystick__surface {
+    border-color: rgba(17, 47, 65, 0.34);
+    background: rgba(237, 244, 248, 0.42);
+  }
+
+  :root[data-theme="light"] .mobile-joystick > small {
+    color: #183440;
+    text-shadow: 0 1px 2px #fff;
+  }
+
+  :root[data-theme="light"] .mobile-joystick__label {
+    color: #183440;
+  }
+
+  .mobile-posture-actions {
+    z-index: 3;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .mobile-posture-actions button {
+    min-height: 44px;
+    padding: 0 8px;
+    border-color: rgba(255, 255, 255, 0.36);
+    background: rgba(8, 13, 18, 0.58);
+    backdrop-filter: blur(5px);
+    font-size: 10px;
+  }
+
+  .mobile-controls-toggle small {
+    color: var(--color-brand-blue);
+    font-size: 9px;
+    font-weight: 700;
+  }
+
+  :root[data-theme="light"] .mobile-controls-toggle {
+    border-color: #c7d0d7;
+    color: #1b2933;
+    background: #f4f6f8;
+  }
+
+  .teleoperation-grid {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px !important;
+    width: 100%;
+    min-height: 0;
+    margin: 0;
+  }
+
+  .teleoperation-card,
+  :root[data-theme="light"] .teleoperation-card {
+    min-height: 0 !important;
+    padding: 4px !important;
+    gap: 5px;
+    border: 0 !important;
+    background: transparent !important;
+  }
+
+  .teleoperation-card__header {
+    display: block;
+    text-align: center;
+  }
+
+  .teleoperation-card__header::before {
+    display: none;
+  }
+
+  .teleoperation-card__header strong {
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .teleoperation-card--system {
+    display: none;
+  }
+
+  .teleoperation-panel.is-secondary-open .teleoperation-card--system {
+    position: absolute;
+    inset: 52px 6px 58px;
+    z-index: 3;
+    display: flex;
+    padding: 8px !important;
+    overflow-y: auto;
+    border: 1px solid var(--color-border) !important;
+    border-radius: 10px;
+    background: var(--color-surface-dark) !important;
+  }
+
+  :root[data-theme="light"] .teleoperation-panel.is-secondary-open .teleoperation-card--system {
+    background: #eef1f4 !important;
+  }
+
+  .teleoperation-panel.is-secondary-open .teleoperation-card--direction,
+  .teleoperation-panel.is-secondary-open .teleoperation-card--response {
+    visibility: hidden;
+  }
+
+  .teleoperation-arm-button,
+  .teleoperation-avoidance-button,
+  .teleoperation-posture button {
+    min-height: 44px;
+  }
+
+  .teleoperation-pad,
+  .teleoperation-pad__row {
+    grid-template-columns: repeat(3, 44px);
+    gap: 5px;
+  }
+
+  .teleoperation-pad {
+    margin: 0;
+  }
+
+  .teleoperation-key {
+    width: 44px;
+    height: 44px;
+  }
+
+  .teleoperation-speed {
+    grid-template-columns: 44px 58px 44px;
+    gap: 5px;
+    margin: 0;
+  }
+
+  .teleoperation-speed__button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .teleoperation-footer {
+    z-index: 4;
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .teleoperation-emergency {
+    width: 100% !important;
+    min-height: 44px;
+  }
+
+  .map-drawer {
+    inset: var(--header-height) 0 0;
+    padding: 8px max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  }
+
+  .map-drawer > .panel {
+    width: 100%;
+    max-height: 100%;
+    padding: 10px;
+  }
+}
+
+/* Zonas de toque separadas: comandos à esquerda e joystick à direita. */
+@media (orientation: landscape) and (max-width: 1199px) and (max-height: 560px) {
+  .mobile-camera-actions,
+  :root[data-theme="light"] .mobile-camera-actions,
+  :root[data-theme="dark"] .mobile-camera-actions {
+    right: clamp(132px, 20vw, 152px) !important;
+    bottom: 3px !important;
+    left: 8px !important;
+  }
+
+  .mobile-camera-controls .mobile-joystick {
+    right: max(8px, env(safe-area-inset-right)) !important;
+    bottom: max(7px, env(safe-area-inset-bottom)) !important;
+    left: auto !important;
+  }
+}
+
+/* Celular em landscape: câmera dominante à esquerda e comandos à direita. */
+@media (orientation: landscape) and (max-width: 1199px) and (max-height: 560px) {
+  .mobile-camera-controls::after {
+    content: none;
+  }
+
+  .mobile-camera-controls .mobile-joystick {
+    bottom: max(4px, env(safe-area-inset-bottom));
+  }
+
+  :root {
+    --header-height: 42px;
+  }
+
+  .app-header-inner {
+    position: relative;
+  }
+
+  .app-header-partners {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    z-index: 1;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: max-content;
+    max-width: calc(100% - 104px);
+    visibility: visible !important;
+    transform: translate(-50%, -50%);
+  }
+
+  .partner-logo-slot,
+  .partner-logo-slot--oracle,
+  .app-header-brand,
+  .brand-divider {
+    display: flex !important;
+    flex: 0 0 auto;
+    visibility: visible !important;
+  }
+
+  .app-header-logo {
+    width: auto !important;
+    height: 20px !important;
+    max-height: 20px !important;
+  }
+
+  .app-header-oracle-logo {
+    position: static !important;
+    display: block !important;
+    width: auto !important;
+    height: auto !important;
+    max-height: none !important;
+    object-fit: contain;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .brand-divider {
+    width: 1px;
+    height: 17px;
+  }
+
+  .header-menu,
+  .app-header-actions {
+    position: relative;
+    z-index: 2;
+  }
+
+  /* O login não possui o menu esquerdo do dashboard: usa um header
+     próprio para manter o co-branding realmente centralizado. */
+  .app-header--login .app-header-inner {
+    display: flex;
+    justify-content: flex-end;
+    padding-inline: max(10px, env(safe-area-inset-left)) max(10px, env(safe-area-inset-right));
+  }
+
+  .app-header--login .app-header-partners {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    display: flex !important;
+    flex-direction: row;
+    gap: 10px;
+    width: max-content;
+    transform: translate(-50%, -50%);
+  }
+
+  .app-header--login .partner-logo-slot:first-child {
+    width: 106px !important;
+    height: 26px !important;
+    overflow: visible;
+  }
+
+  .app-header--login .partner-logo-slot--oracle {
+    display: flex !important;
+    width: 86px !important;
+    height: 24px !important;
+    overflow: visible;
+  }
+
+  .app-header--login .app-header-oracle-logo {
+    position: static !important;
+    display: block !important;
+    width: 86px !important;
+    max-width: 86px !important;
+    height: auto !important;
+    max-height: none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: none !important;
+  }
+
+  .app-header--login .app-header-actions {
+    margin-left: auto;
+  }
+
+  .app-header--login .header-demo-button {
+    height: 34px;
+    min-height: 34px;
+    padding-inline: 10px;
+    font-size: 10px;
+  }
+
+  .login-layout {
+    width: 100%;
+    height: auto !important;
+    min-height: 100dvh;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+
+  .login-page {
+    display: grid;
+    grid-template-columns: minmax(0, 620px);
+    place-content: start center;
+    width: 100%;
+    height: auto;
+    min-height: calc(100dvh - var(--header-height));
+    padding: 10px max(12px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    overflow: visible;
+  }
+
+  .login-card,
+  :root[data-theme="light"] .login-card,
+  :root[data-theme="dark"] .login-card {
+    width: 100%;
+    max-width: 620px;
+    padding: 12px 16px !important;
+    border-radius: 14px;
+  }
+
+  .login-header--pill {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    margin-bottom: 10px;
+    padding: 8px 12px;
+    text-align: center;
+  }
+
+  .login-header--pill p {
+    display: none;
+  }
+
+  .login-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 12px;
+  }
+
+  .login-form label {
+    min-width: 0;
+    gap: 4px;
+  }
+
+  .login-form input,
+  :root[data-theme="light"] .login-form input,
+  :root[data-theme="dark"] .login-form input {
+    min-height: 44px;
+    padding-inline: 12px;
+    border-radius: 10px;
+  }
+
+  .login-form > .form-message,
+  .login-form > .primary-button {
+    grid-column: 1 / -1;
+  }
+
+  .login-form > .primary-button {
+    min-height: 44px;
+    border-radius: 10px;
+  }
+
+  .dashboard-page,
+  :root[data-theme="light"] .dashboard-page {
+    height: auto;
+    min-height: calc(100dvh - var(--header-height));
+    overflow-x: hidden;
+    overflow-y: visible;
+  }
+
+  .orientation-hint {
+    display: none;
+  }
+
+  .dashboard-grid {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: minmax(0, 1fr);
+    height: calc(100dvh - var(--header-height) - 16px);
+    min-height: 300px !important;
+  }
+
+  .operation-hud {
+    position: absolute !important;
+    z-index: 5;
+    top: 5px;
+    right: 7px;
+    left: 7px;
+    width: auto;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 999px;
+    background: rgba(6, 10, 14, 0.52) !important;
+    backdrop-filter: blur(6px);
+  }
+
+  .video-panel {
+    grid-column: 1;
+    grid-row: 1;
+    height: 100%;
+    max-height: none !important;
+  }
+
+  .video-placeholder {
+    height: 100%;
+  }
+
+  .teleoperation-panel {
+    position: absolute;
+    z-index: 4;
+    inset: 0;
+    display: block;
+    width: auto;
+    height: 100%;
+    max-height: none !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    pointer-events: none;
+  }
+
+  .teleoperation-panel > * {
+    pointer-events: auto;
+  }
+
+  .mobile-controls-toggle {
+    position: absolute;
+    top: 42px;
+    right: 8px;
+    width: 172px;
+    background: rgba(7, 12, 17, 0.64);
+    backdrop-filter: blur(6px);
+  }
+
+  .mobile-controls-toggle small {
+    display: none;
+  }
+
+  .mobile-joystick {
+    position: absolute;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    left: max(10px, env(safe-area-inset-left));
+  }
+
+  .mobile-posture-actions {
+    position: absolute;
+    right: max(8px, env(safe-area-inset-right));
+    bottom: 104px;
+    width: 172px;
+  }
+
+  .teleoperation-grid {
+    position: static;
+    display: block;
+  }
+
+  .teleoperation-card--direction {
+    display: none;
+  }
+
+  .teleoperation-card--response {
+    position: absolute;
+    right: max(8px, env(safe-area-inset-right));
+    bottom: 55px;
+    width: 172px;
+    padding: 0 !important;
+  }
+
+  .teleoperation-card--response .teleoperation-card__header {
+    display: none;
+  }
+
+  .teleoperation-panel.is-secondary-open .teleoperation-card--response {
+    visibility: hidden;
+  }
+
+  .teleoperation-panel.is-secondary-open .teleoperation-card--system {
+    inset: 88px max(8px, env(safe-area-inset-right)) 55px auto;
+    width: min(260px, 44vw);
+    background: rgba(8, 13, 18, 0.9) !important;
+    backdrop-filter: blur(9px);
+  }
+
+  .teleoperation-panel.is-secondary-open .teleoperation-card--system .teleoperation-posture {
+    display: none;
+  }
+
+  .teleoperation-panel.is-secondary-open .mobile-posture-actions {
+    visibility: hidden;
+  }
+
+  .teleoperation-footer {
+    position: absolute;
+    right: max(8px, env(safe-area-inset-right));
+    bottom: max(7px, env(safe-area-inset-bottom));
+    width: 172px;
+  }
+
+  .teleoperation-emergency {
+    color: #fff;
+    background: rgba(168, 40, 40, 0.9);
+    box-shadow: 0 0 0 2px rgba(255, 103, 103, 0.28);
+  }
+}
+
+/* Celular em retrato: fluxo vertical, sem cortes, com sugestão não bloqueante. */
+@media (max-width: 767px) and (orientation: portrait) {
+  :root {
+    --header-height: 54px;
+  }
+
+  .dashboard-page,
+  :root[data-theme="light"] .dashboard-page {
+    min-height: calc(100dvh - var(--header-height));
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    overflow: visible;
+  }
+
+  .app-header--login .app-header-inner {
+    display: flex;
+    justify-content: center;
+    position: relative;
+  }
+
+  .app-header--login .app-header-partners {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    display: flex !important;
+    flex-direction: row;
+    gap: 9px;
+    width: max-content;
+    transform: translate(-50%, -50%);
+  }
+
+  .app-header--login .partner-logo-slot:first-child {
+    width: 104px !important;
+    height: 25px !important;
+    overflow: visible;
+  }
+
+  .app-header--login .partner-logo-slot--oracle {
+    display: flex !important;
+    width: 82px !important;
+    height: 23px !important;
+    overflow: visible;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  .app-header--login .app-header-oracle-logo {
+    position: static !important;
+    display: block !important;
+    width: 82px !important;
+    max-width: 82px !important;
+    height: auto !important;
+    max-height: none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: none !important;
+  }
+
+  .app-header--login .header-demo-button {
+    display: none;
+  }
+
+  .login-layout {
+    height: auto !important;
+    min-height: 100dvh;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+
+  .login-page {
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: 100%;
+    max-width: 100%;
+    min-height: calc(100dvh - var(--header-height));
+    padding: 20px 14px max(24px, env(safe-area-inset-bottom));
+  }
+
+  .login-card,
+  :root[data-theme="light"] .login-card,
+  :root[data-theme="dark"] .login-card {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 420px !important;
+    justify-self: center;
+  }
+
+  .login-header--pill {
+    display: grid;
+    justify-items: center;
+    min-width: 0;
+  }
+
+  .login-header--pill p {
+    width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .orientation-hint {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 8px;
+    padding: 8px 10px;
+    border: 1px solid rgba(42, 169, 224, 0.35);
+    border-radius: 10px;
+    color: var(--color-text);
+    background: rgba(42, 169, 224, 0.1);
+  }
+
+  .orientation-hint > span {
+    color: var(--color-brand-blue);
+    font-size: 22px;
+  }
+
+  .orientation-hint p {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .orientation-hint strong {
+    display: block;
+  }
+
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) !important;
+    height: auto;
+  }
+
+  .video-placeholder {
+    aspect-ratio: 16 / 9;
+    height: auto;
+  }
+
+  .teleoperation-panel {
+    min-height: 300px !important;
+  }
+
+  .mobile-joystick {
+    position: absolute;
+    bottom: 58px;
+    left: 8px;
+  }
+
+  .mobile-posture-actions {
+    position: absolute;
+    right: 8px;
+    bottom: 108px;
+    width: calc(100% - 158px);
+  }
+
+  .teleoperation-card--direction {
+    display: none;
+  }
+
+  .teleoperation-card--response {
+    position: absolute;
+    right: 8px;
+    bottom: 58px;
+    width: calc(100% - 158px);
+    padding: 0 !important;
+  }
+
+  .teleoperation-card--response .teleoperation-card__header {
+    display: none;
+  }
+
+  .teleoperation-footer {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    left: 158px;
+  }
+
+  .teleoperation-panel.is-secondary-open {
+    min-height: 390px !important;
+  }
+
+  .teleoperation-panel.is-secondary-open .teleoperation-card--system {
+    position: static;
+    order: -1;
+    max-height: none;
+  }
+
+  .teleoperation-panel.is-secondary-open .mobile-joystick,
+  .teleoperation-panel.is-secondary-open .mobile-posture-actions {
+    visibility: hidden;
+  }
+
+  .teleoperation-panel.is-secondary-open .teleoperation-card--direction,
+  .teleoperation-panel.is-secondary-open .teleoperation-card--response {
+    display: none;
+  }
+}
+
+/* Faixa final landscape: replica a linguagem visual dos status superiores.
+   O alvo interativo continua com 44px; a pílula visível tem 32px. */
+@media (orientation: landscape) and (max-width: 1199px) and (max-height: 560px) {
+  .mobile-camera-controls .mobile-joystick {
+    right: max(9px, env(safe-area-inset-right));
+    bottom: 52px;
+  }
+
+  .mobile-camera-actions,
+  :root[data-theme="light"] .mobile-camera-actions {
+    right: 8px;
+    bottom: 0;
+    left: 8px;
+    display: flex;
+    width: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .mobile-camera-actions .mobile-arm-button,
+  .mobile-camera-actions .mobile-avoidance-button,
+  .mobile-camera-actions .mobile-posture-actions button,
+  .mobile-camera-actions .mobile-speed,
+  .mobile-camera-actions .mobile-emergency {
+    position: relative;
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+    min-height: 44px;
+    padding: 0 5px;
+    border: 0 !important;
+    color: rgba(239, 242, 244, 0.86) !important;
+    background: transparent !important;
+    box-shadow: none;
+    isolation: isolate;
+  }
+
+  .mobile-camera-actions .mobile-arm-button::before,
+  .mobile-camera-actions .mobile-avoidance-button::before,
+  .mobile-camera-actions .mobile-posture-actions button::before,
+  .mobile-camera-actions .mobile-speed::before,
+  .mobile-camera-actions .mobile-emergency::before {
+    content: "";
+    position: absolute;
+    inset: 6px 0;
+    z-index: -1;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 999px;
+    background: rgba(8, 13, 18, 0.72);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+  }
+
+  .mobile-camera-actions .mobile-posture-actions {
+    display: contents;
+  }
+
+  .mobile-camera-actions .mobile-speed {
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr) 26px;
+  }
+
+  .mobile-camera-actions .mobile-speed button {
+    min-width: 26px;
+    min-height: 44px;
+  }
+
+  .mobile-camera-actions .mobile-emergency::before {
+    border-color: rgba(207, 70, 70, 0.72);
+    background: rgba(168, 40, 40, 0.9);
+  }
+
+  :root[data-theme="light"] .mobile-camera-actions .mobile-arm-button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-avoidance-button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-posture-actions button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed {
+    color: #45535c !important;
+  }
+
+  :root[data-theme="light"] .mobile-camera-actions .mobile-arm-button::before,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-avoidance-button::before,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-posture-actions button::before,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed::before {
+    border-color: #b8c7d0;
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: 0 3px 10px rgba(23, 73, 96, 0.1);
+  }
+
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed strong {
+    color: #45535c;
+  }
+
+  :root[data-theme="light"] .mobile-camera-actions .mobile-emergency {
+    color: #fff !important;
+  }
+
+  :root[data-theme="light"] .mobile-camera-actions .mobile-emergency::before {
+    border-color: #b73a3a;
+    background: rgba(168, 40, 40, 0.92);
+  }
+}
+
+/* Ajuste visual definitivo: os controles inferiores usam exatamente a
+   densidade e o acabamento da barra de status, sem moldura azul externa. */
+@media (orientation: landscape) and (max-width: 1199px) and (max-height: 560px) {
+  .mobile-camera-actions,
+  :root[data-theme="light"] .mobile-camera-actions,
+  :root[data-theme="dark"] .mobile-camera-actions {
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: 0 !important;
+  }
+
+  .mobile-camera-actions::before,
+  .mobile-camera-actions::after {
+    content: none !important;
+    display: none !important;
+  }
+
+  .mobile-camera-actions .mobile-arm-button,
+  .mobile-camera-actions .mobile-avoidance-button,
+  .mobile-camera-actions .mobile-posture-actions button,
+  .mobile-camera-actions .mobile-speed,
+  .mobile-camera-actions .mobile-emergency {
+    min-height: 44px;
+    color: rgba(239, 242, 244, 0.78) !important;
+    font-family: var(--font-secondary);
+    font-size: 6.5px;
+    font-weight: 700;
+    letter-spacing: 0.035em;
+    text-transform: uppercase;
+  }
+
+  .mobile-camera-actions .mobile-arm-button::before,
+  .mobile-camera-actions .mobile-avoidance-button::before,
+  .mobile-camera-actions .mobile-posture-actions button::before,
+  .mobile-camera-actions .mobile-speed::before,
+  .mobile-camera-actions .mobile-emergency::before {
+    inset: 10px 1px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(12, 18, 23, 0.82);
+    box-shadow: none;
+  }
+
+  .mobile-camera-actions .mobile-speed button {
+    min-height: 44px;
+    color: rgba(239, 242, 244, 0.7);
+    font-size: 12px;
+  }
+
+  .mobile-camera-actions .mobile-speed strong {
+    color: rgba(239, 242, 244, 0.82);
+    font-size: 7px;
+  }
+
+  .mobile-camera-actions .mobile-emergency {
+    color: #fff !important;
+  }
+
+  .mobile-camera-actions .mobile-emergency::before {
+    border-color: rgba(209, 71, 71, 0.5);
+    background: rgba(151, 43, 43, 0.88);
+  }
+
+  .mobile-camera-actions button:disabled {
+    opacity: 0.62;
+  }
+
+  :root[data-theme="light"] .mobile-camera-actions .mobile-arm-button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-avoidance-button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-posture-actions button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed {
+    color: #42545f !important;
+  }
+
+  :root[data-theme="light"] .mobile-camera-actions .mobile-arm-button::before,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-avoidance-button::before,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-posture-actions button::before,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed::before {
+    border-color: #cbd5db;
+    background: rgba(235, 240, 243, 0.96);
+  }
+
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed strong {
+    color: #42545f;
+  }
+
+  .video-panel,
+  .video-placeholder--live,
+  :root[data-theme="light"] .video-panel,
+  :root[data-theme="light"] .video-placeholder--live {
+    border-color: rgba(127, 145, 158, 0.16) !important;
+    box-shadow: none !important;
+  }
+}
+
+/* Normalização final dos controles compactos. Este bloco deliberadamente
+   remove heranças dos botões desktop para evitar tamanhos e bordas duplas. */
+@media (orientation: landscape) and (max-width: 1199px) and (max-height: 560px) {
+  .mobile-camera-actions,
+  :root[data-theme="light"] .mobile-camera-actions,
+  :root[data-theme="dark"] .mobile-camera-actions {
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .mobile-camera-actions .mobile-posture-actions {
+    display: contents !important;
+  }
+
+  .mobile-camera-actions .mobile-arm-button,
+  .mobile-camera-actions .mobile-avoidance-button,
+  .mobile-camera-actions .mobile-posture-actions button,
+  .mobile-camera-actions .mobile-speed,
+  .mobile-camera-actions .mobile-emergency {
+    position: relative !important;
+    flex: 1 1 0 !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: 44px !important;
+    min-height: 44px !important;
+    margin: 0 !important;
+    padding: 0 4px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    outline: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    filter: none !important;
+    appearance: none;
+  }
+
+  .mobile-camera-actions .mobile-arm-button::after,
+  .mobile-camera-actions .mobile-avoidance-button::after,
+  .mobile-camera-actions .mobile-posture-actions button::after,
+  .mobile-camera-actions .mobile-speed::after,
+  .mobile-camera-actions .mobile-emergency::after {
+    content: none !important;
+    display: none !important;
+  }
+
+  .mobile-camera-actions .mobile-arm-button::before,
+  .mobile-camera-actions .mobile-avoidance-button::before,
+  .mobile-camera-actions .mobile-posture-actions button::before,
+  .mobile-camera-actions .mobile-speed::before,
+  .mobile-camera-actions .mobile-emergency::before {
+    content: "" !important;
+    position: absolute !important;
+    inset: 8px 0 !important;
+    z-index: -1 !important;
+    display: block !important;
+    border: 1px solid rgba(156, 174, 184, 0.42) !important;
+    border-radius: 999px !important;
+    background: rgba(13, 19, 24, 0.86) !important;
+    box-shadow: none !important;
+  }
+
+  .mobile-camera-actions .mobile-arm-button,
+  .mobile-camera-actions .mobile-avoidance-button,
+  .mobile-camera-actions .mobile-posture-actions button,
+  .mobile-camera-actions .mobile-speed,
+  .mobile-camera-actions .mobile-speed button,
+  .mobile-camera-actions .mobile-speed strong {
+    color: rgba(239, 242, 244, 0.82) !important;
+  }
+
+  .mobile-camera-actions .mobile-speed {
+    display: grid !important;
+    grid-template-columns: 24px minmax(0, 1fr) 24px !important;
+  }
+
+  .mobile-camera-actions .mobile-speed button {
+    width: 24px !important;
+    min-width: 24px !important;
+    height: 44px !important;
+    min-height: 44px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    outline: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .mobile-camera-actions .mobile-emergency {
+    color: #fff !important;
+  }
+
+  .mobile-camera-actions .mobile-emergency::before {
+    border-color: rgba(183, 58, 58, 0.62) !important;
+    background: rgba(160, 45, 45, 0.92) !important;
+  }
+
+  .mobile-camera-actions button:disabled {
+    opacity: 0.68 !important;
+  }
+
+  :root[data-theme="light"] .mobile-camera-actions .mobile-arm-button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-avoidance-button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-posture-actions button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed strong {
+    color: #41545f !important;
+  }
+
+  :root[data-theme="light"] .mobile-camera-actions .mobile-arm-button::before,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-avoidance-button::before,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-posture-actions button::before,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed::before {
+    border-color: rgba(42, 169, 224, 0.36) !important;
+    background: rgba(248, 251, 252, 0.96) !important;
+  }
+
+  :root[data-theme="light"] .mobile-camera-actions .mobile-emergency::before {
+    border-color: rgba(168, 40, 40, 0.7) !important;
+    background: rgba(168, 40, 40, 0.9) !important;
+  }
+
+  .mobile-joystick.is-disabled {
+    filter: none !important;
+    opacity: 1 !important;
+  }
+
+  .mobile-joystick.is-disabled .mobile-joystick__surface {
+    opacity: 0.76;
+  }
+
+  .mobile-joystick.is-disabled .mobile-joystick__knob {
+    opacity: 0.58;
+  }
+
+  .mobile-joystick__label,
+  .mobile-joystick.is-disabled .mobile-joystick__label {
+    color: rgba(239, 242, 244, 0.82) !important;
+    opacity: 1 !important;
+  }
+
+  .mobile-joystick__label b,
+  .mobile-joystick.is-disabled .mobile-joystick__label b {
+    color: var(--color-brand-blue) !important;
+    opacity: 1 !important;
+  }
+
+  :root[data-theme="light"] .mobile-joystick__surface {
+    border: 1px solid rgba(42, 169, 224, 0.48) !important;
+    background: rgba(249, 252, 253, 0.72) !important;
+    box-shadow:
+      0 0 0 3px rgba(42, 169, 224, 0.07),
+      inset 0 0 24px rgba(42, 169, 224, 0.07) !important;
+  }
+
+  :root[data-theme="light"] .mobile-joystick__label,
+  :root[data-theme="light"] .mobile-joystick.is-disabled .mobile-joystick__label {
+    color: #3d515d !important;
+  }
+
+  :root[data-theme="light"] .mobile-joystick__label b,
+  :root[data-theme="light"] .mobile-joystick.is-disabled .mobile-joystick__label b {
+    color: #149bd2 !important;
+  }
+}
+
+@media (max-width: 374px) and (orientation: portrait) {
+  .app-header-inner {
+    grid-template-columns: 38px minmax(0, 1fr) 38px;
+    gap: 5px;
+    padding-inline: 5px;
+  }
+
+  .app-header-logo {
+    height: 19px;
+  }
+
+  .app-header-oracle-logo {
+    height: 14px;
+  }
+
+  .header-menu-trigger,
+  .theme-toggle {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    min-height: 38px;
+  }
+}
+
+/* Contrato final dos controles mobile: a camada operacional pertence ao
+   visor da câmera. Isso evita que grids legados escondam joystick ou ações. */
+@media (max-width: 767px),
+  (orientation: landscape) and (max-width: 1199px) and (max-height: 560px) {
+  .video-placeholder--live {
+    position: relative;
+  }
+
+  .mobile-camera-controls {
+    position: absolute;
+    inset: 0;
+    z-index: 15;
+    display: block;
+    pointer-events: none;
+  }
+
+  .mobile-camera-controls button,
+  .mobile-camera-controls .mobile-joystick {
+    pointer-events: auto;
+  }
+
+  .mobile-camera-controls .mobile-joystick {
+    width: clamp(116px, 34dvh, 136px);
+  }
+
+  .mobile-camera-controls .mobile-joystick__surface {
+    width: clamp(110px, 32dvh, 130px);
+    height: clamp(110px, 32dvh, 130px);
+  }
+
+  .mobile-camera-controls .mobile-joystick {
+    position: absolute;
+    bottom: max(9px, env(safe-area-inset-bottom));
+    right: max(9px, env(safe-area-inset-right));
+    left: auto;
+  }
+
+  .mobile-camera-actions {
+    position: absolute;
+    right: auto;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    left: max(8px, env(safe-area-inset-left));
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+    width: clamp(260px, 46vw, 330px);
+    pointer-events: none;
+  }
+
+  .mobile-camera-actions > * {
+    pointer-events: auto;
+  }
+
+  .mobile-arm-button,
+  .mobile-avoidance-button,
+  .mobile-speed,
+  .mobile-emergency,
+  .mobile-camera-actions .mobile-posture-actions button {
+    min-height: 44px;
+    border: 1px solid rgba(255, 255, 255, 0.38);
+    border-radius: 999px;
+    color: #fff;
+    background: rgba(7, 12, 17, 0.62);
+    box-shadow: 0 5px 18px rgba(0, 0, 0, 0.18);
+    backdrop-filter: blur(6px);
+  }
+
+  .mobile-arm-button {
+    grid-column: 1;
+    grid-row: 1;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  .mobile-avoidance-button {
+    grid-column: 2;
+    grid-row: 1;
+    padding-inline: 8px;
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  .mobile-arm-button.is-active,
+  .mobile-avoidance-button.is-active {
+    border-color: rgba(88, 211, 155, 0.8);
+    background: rgba(33, 111, 79, 0.76);
+  }
+
+  .mobile-camera-actions .mobile-posture-actions {
+    position: static;
+    display: grid;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+  }
+
+  .mobile-speed {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-row: 3;
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    align-items: center;
+    overflow: hidden;
+  }
+
+  .mobile-speed button {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    border: 0;
+    color: #fff;
+    background: transparent;
+    font-size: 20px;
+    font-weight: 800;
+  }
+
+  .mobile-speed strong {
+    font-size: 12px;
+    text-align: center;
+  }
+
+  .mobile-emergency {
+    grid-column: 2;
+    grid-row: 3;
+    width: 100%;
+    color: #fff;
+    background: rgba(168, 40, 40, 0.92);
+    box-shadow: 0 0 0 2px rgba(255, 103, 103, 0.3);
+  }
+
+  .mobile-speed {
+    grid-column: 1;
+  }
+
+  .teleoperation-panel,
+  :root[data-theme="light"] .teleoperation-panel {
+    display: none !important;
+  }
+
+  .teleoperation-panel.is-secondary-open,
+  :root[data-theme="light"] .teleoperation-panel.is-secondary-open {
+    z-index: 20;
+    display: flex !important;
+    flex-direction: column;
+    background: rgba(8, 13, 18, 0.94) !important;
+    backdrop-filter: blur(10px);
+  }
+
+  .teleoperation-panel.is-secondary-open .mobile-controls-toggle {
+    position: static;
+    display: flex;
+    width: 100%;
+  }
+
+  .teleoperation-panel.is-secondary-open .teleoperation-grid {
+    display: block;
+  }
+
+  .teleoperation-panel.is-secondary-open .teleoperation-card--system {
+    position: static;
+    display: flex;
+    width: 100%;
+    max-height: none;
+    background: transparent !important;
+  }
+
+  .teleoperation-panel.is-secondary-open .teleoperation-card--direction,
+  .teleoperation-panel.is-secondary-open .teleoperation-card--response,
+  .teleoperation-panel.is-secondary-open .teleoperation-footer {
+    display: none;
+  }
+}
+
+/* Deve permanecer como a última regra do arquivo: neutraliza os antigos
+   contratos mobile que usavam largura fixa e borda azul nos controles. */
+@media (orientation: landscape) and (max-width: 1199px) and (max-height: 560px) {
+  .mobile-camera-actions,
+  :root[data-theme="light"] .mobile-camera-actions,
+  :root[data-theme="dark"] .mobile-camera-actions {
+    right: 8px !important;
+    bottom: 0 !important;
+    left: 8px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    width: auto !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    outline: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .mobile-camera-actions::before,
+  .mobile-camera-actions::after {
+    content: none !important;
+    display: none !important;
+  }
+
+  .mobile-camera-actions .mobile-posture-actions {
+    display: contents !important;
+  }
+
+  .mobile-camera-actions .mobile-arm-button,
+  .mobile-camera-actions .mobile-avoidance-button,
+  .mobile-camera-actions .mobile-posture-actions button,
+  .mobile-camera-actions .mobile-speed,
+  .mobile-camera-actions .mobile-emergency,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-arm-button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-avoidance-button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-posture-actions button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-emergency {
+    position: relative !important;
+    flex: 1 1 0 !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: 44px !important;
+    min-height: 44px !important;
+    margin: 0 !important;
+    padding: 0 4px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    outline: 0 !important;
+    color: rgba(239, 242, 244, 0.8) !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    filter: none !important;
+    appearance: none !important;
+    isolation: isolate;
+  }
+
+  .mobile-camera-actions .mobile-arm-button::before,
+  .mobile-camera-actions .mobile-avoidance-button::before,
+  .mobile-camera-actions .mobile-posture-actions button::before,
+  .mobile-camera-actions .mobile-speed::before,
+  .mobile-camera-actions .mobile-emergency::before {
+    content: "" !important;
+    position: absolute !important;
+    inset: 9px 0 !important;
+    z-index: -1 !important;
+    display: block !important;
+    border: 1px solid rgba(156, 174, 184, 0.38) !important;
+    border-radius: 999px !important;
+    background: rgba(13, 19, 24, 0.84) !important;
+    box-shadow: none !important;
+  }
+
+  .mobile-camera-actions .mobile-arm-button::after,
+  .mobile-camera-actions .mobile-avoidance-button::after,
+  .mobile-camera-actions .mobile-posture-actions button::after,
+  .mobile-camera-actions .mobile-speed::after,
+  .mobile-camera-actions .mobile-emergency::after {
+    content: none !important;
+    display: none !important;
+  }
+
+  .mobile-camera-actions .mobile-speed {
+    display: grid !important;
+    grid-template-columns: 24px minmax(0, 1fr) 24px !important;
+  }
+
+  .mobile-camera-actions .mobile-speed button {
+    width: 24px !important;
+    min-width: 24px !important;
+    height: 44px !important;
+    min-height: 44px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    color: inherit !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .mobile-camera-actions .mobile-arm-button.is-active,
+  .mobile-camera-actions .mobile-avoidance-button.is-active {
+    color: #78cff1 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .mobile-camera-actions .mobile-emergency,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-emergency {
+    color: #fff !important;
+    background: transparent !important;
+  }
+
+  .mobile-camera-actions .mobile-emergency::before,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-emergency::before {
+    border-color: rgba(183, 58, 58, 0.58) !important;
+    background: rgba(160, 45, 45, 0.9) !important;
+  }
+
+  :root[data-theme="light"] .mobile-camera-actions .mobile-arm-button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-avoidance-button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-posture-actions button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed strong {
+    color: #41545f !important;
+  }
+
+  :root[data-theme="light"] .mobile-camera-actions .mobile-arm-button::before,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-avoidance-button::before,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-posture-actions button::before,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed::before {
+    border-color: rgba(42, 169, 224, 0.28) !important;
+    background: rgba(244, 248, 250, 0.96) !important;
+  }
+
+  .mobile-camera-actions button:disabled {
+    opacity: 0.68 !important;
+  }
+
+  .mobile-camera-controls .mobile-joystick {
+    right: max(9px, env(safe-area-inset-right)) !important;
+    bottom: 52px !important;
+    left: auto !important;
+  }
+
+  .mobile-joystick.is-disabled {
+    filter: none !important;
+    opacity: 1 !important;
+  }
+
+  .mobile-joystick.is-disabled .mobile-joystick__surface {
+    opacity: 0.78 !important;
+  }
+
+  .mobile-joystick__label,
+  .mobile-joystick.is-disabled .mobile-joystick__label {
+    opacity: 1 !important;
+  }
+
+  .mobile-joystick__label b,
+  .mobile-joystick.is-disabled .mobile-joystick__label b,
+  :root[data-theme="light"] .mobile-joystick__label b,
+  :root[data-theme="light"] .mobile-joystick.is-disabled .mobile-joystick__label b {
+    color: #149bd2 !important;
+    opacity: 1 !important;
+  }
+
+  :root[data-theme="light"] .mobile-joystick__surface {
+    border: 1px solid rgba(42, 169, 224, 0.42) !important;
+    background: rgba(249, 252, 253, 0.7) !important;
+    box-shadow:
+      0 0 0 2px rgba(42, 169, 224, 0.055),
+      inset 0 0 20px rgba(42, 169, 224, 0.06) !important;
+  }
+}
+
+@media (orientation: landscape) and (max-width: 1199px) and (max-height: 560px) {
+  .teleoperation-panel.is-secondary-open,
+  :root[data-theme="light"] .teleoperation-panel.is-secondary-open {
+    position: absolute;
+    inset: 48px max(8px, env(safe-area-inset-right)) 58px auto;
+    width: min(270px, 46vw);
+    height: auto;
+    padding: 8px !important;
+    overflow-y: auto;
+    border: 1px solid var(--color-brand-blue) !important;
+    border-radius: 12px !important;
+    pointer-events: auto;
+  }
+
+  .viewport-controls {
+    top: 42px;
+    right: auto;
+    bottom: auto;
+    left: 8px;
+  }
+
+  .mobile-camera-actions {
+    right: clamp(124px, 19vw, 146px);
+    bottom: max(2px, env(safe-area-inset-bottom));
+    z-index: 2;
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    width: auto;
+    padding: 3px;
+    border: 1px solid rgba(42, 169, 224, 0.42);
+    border-radius: 999px;
+    background: rgba(5, 12, 17, 0.18);
+    box-shadow: 0 3px 14px rgba(42, 169, 224, 0.08);
+  }
+
+  .mobile-camera-actions .mobile-arm-button,
+  .mobile-camera-actions .mobile-avoidance-button,
+  .mobile-camera-actions .mobile-posture-actions button,
+  .mobile-camera-actions .mobile-speed,
+  .mobile-camera-actions .mobile-emergency {
+    flex: 0 0 auto;
+    min-height: 44px;
+    width: 80px;
+    padding: 0 5px;
+    border-radius: 999px;
+    font-size: 8px;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
+
+  .mobile-camera-actions .mobile-arm-button,
+  .mobile-camera-actions .mobile-avoidance-button {
+    width: 80px;
+  }
+
+  .mobile-camera-actions .mobile-posture-actions {
+    display: contents;
+  }
+
+  .mobile-camera-actions .mobile-posture-actions button:first-child,
+  .mobile-camera-actions .mobile-posture-actions button:last-child {
+    width: 80px;
+  }
+
+  .mobile-camera-actions .mobile-speed {
+    display: grid;
+    width: 80px;
+    grid-template-columns: 24px minmax(0, 1fr) 24px;
+    padding: 0;
+  }
+
+  .mobile-camera-actions .mobile-speed button {
+    min-width: 24px;
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .mobile-camera-actions .mobile-speed strong {
+    font-size: 9px;
+  }
+
+  .mobile-camera-actions .mobile-emergency {
+    width: 80px;
+  }
+
+  .mobile-camera-actions button:disabled {
+    opacity: 0.72;
+  }
+
+  .mobile-camera-actions .mobile-arm-button,
+  .mobile-camera-actions .mobile-avoidance-button,
+  .mobile-camera-actions .mobile-posture-actions button,
+  .mobile-camera-actions .mobile-speed,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-arm-button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-avoidance-button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-posture-actions button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed {
+    border: 1px solid var(--color-brand-blue) !important;
+    color: #173847 !important;
+    background: rgba(255, 255, 255, 0.94) !important;
+    box-shadow: 0 4px 14px rgba(23, 73, 96, 0.16);
+  }
+
+  .mobile-camera-actions .mobile-speed button,
+  .mobile-camera-actions .mobile-speed strong,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed strong {
+    color: #173847;
+  }
+
+  .mobile-camera-actions .mobile-arm-button.is-active,
+  .mobile-camera-actions .mobile-avoidance-button.is-active {
+    color: #075f85 !important;
+    background: #e8f7fd !important;
+    box-shadow: inset 0 0 0 1px rgba(42, 169, 224, 0.3);
+  }
+
+  :root[data-theme="light"] .mobile-camera-actions .mobile-emergency {
+    border-color: #a82828;
+    color: #fff;
+    background: rgba(168, 40, 40, 0.92) !important;
+  }
+
+  :root[data-theme="light"] .operation-statuses > span {
+    border-color: #b8c7d0 !important;
+    color: #2f4653 !important;
+    background: rgba(255, 255, 255, 0.94) !important;
+  }
+
+  :root[data-theme="light"] .mobile-camera-actions {
+    border-color: rgba(42, 169, 224, 0.52);
+    background: rgba(255, 255, 255, 0.58);
+  }
+}
+
+@media (max-width: 767px) and (orientation: portrait) {
+  .app-header,
+  .app-header-inner {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    overflow: hidden;
+  }
+
+  .app-header--authenticated .app-header-inner {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) 40px;
+  }
+
+  .app-header--authenticated .header-menu { grid-column: 1; }
+  .app-header--authenticated .app-header-actions { grid-column: 3; }
+
+  .app-header--authenticated .app-header-partners {
+    position: static !important;
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: center;
+    display: flex !important;
+    width: max-content;
+    max-width: calc(100vw - 100px);
+    transform: none !important;
+  }
+
+  .app-header--authenticated .partner-logo-slot:first-child {
+    width: 96px !important;
+  }
+
+  .app-header--authenticated .partner-logo-slot--oracle,
+  .app-header--authenticated .app-header-oracle-logo {
+    width: 76px !important;
+    max-width: 76px !important;
+  }
+
+  .dashboard-page,
+  :root[data-theme="light"] .dashboard-page,
+  .dashboard-grid,
+  .dashboard-grid > .video-panel,
+  .dashboard-grid > .operation-hud,
+  .video-placeholder--live {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .dashboard-grid {
+    overflow: hidden;
+  }
+
+  .video-placeholder,
+  :root[data-theme="light"] .dashboard-grid > .video-panel .video-placeholder {
+    aspect-ratio: 4 / 3;
+  }
+
+  .mobile-camera-controls .mobile-joystick {
+    bottom: 8px;
+    transform: scale(0.82);
+    transform-origin: right bottom;
+  }
+
+  .mobile-camera-actions {
+    width: 190px;
+  }
+
+  .mobile-camera-actions .mobile-posture-actions {
+    display: grid;
+  }
+
+  .mobile-camera-actions .mobile-speed {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+
+  .mobile-camera-actions .mobile-emergency {
+    grid-column: 1 / -1;
+    grid-row: 4;
+  }
+
+  .teleoperation-panel.is-secondary-open,
+  :root[data-theme="light"] .teleoperation-panel.is-secondary-open {
+    position: relative;
+    display: flex !important;
+    min-height: 0 !important;
+    padding: 8px !important;
+  }
+}
+
+/* Renderização final sem caixas externas: uma única pílula por controle. */
+@media (orientation: landscape) and (max-width: 1199px) and (max-height: 560px) {
+  .mobile-camera-actions,
+  :root[data-theme="light"] .mobile-camera-actions,
+  :root[data-theme="dark"] .mobile-camera-actions {
+    right: clamp(132px, 20vw, 152px) !important;
+    bottom: 3px !important;
+    left: 8px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    width: auto !important;
+    height: 36px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    outline: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .mobile-camera-actions::before,
+  .mobile-camera-actions::after,
+  .mobile-camera-actions .mobile-arm-button::before,
+  .mobile-camera-actions .mobile-arm-button::after,
+  .mobile-camera-actions .mobile-avoidance-button::before,
+  .mobile-camera-actions .mobile-avoidance-button::after,
+  .mobile-camera-actions .mobile-posture-actions button::before,
+  .mobile-camera-actions .mobile-posture-actions button::after,
+  .mobile-camera-actions .mobile-speed::before,
+  .mobile-camera-actions .mobile-speed::after,
+  .mobile-camera-actions .mobile-emergency::before,
+  .mobile-camera-actions .mobile-emergency::after {
+    content: none !important;
+    display: none !important;
+  }
+
+  .mobile-camera-actions .mobile-posture-actions {
+    display: contents !important;
+  }
+
+  .mobile-camera-actions .mobile-arm-button,
+  .mobile-camera-actions .mobile-avoidance-button,
+  .mobile-camera-actions .mobile-posture-actions button,
+  .mobile-camera-actions .mobile-speed,
+  .mobile-camera-actions .mobile-emergency,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-arm-button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-avoidance-button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-posture-actions button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-emergency {
+    position: static !important;
+    flex: 1 1 0 !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: 32px !important;
+    min-height: 32px !important;
+    margin: 0 !important;
+    padding: 0 4px !important;
+    border: 1px solid rgba(145, 162, 172, 0.38) !important;
+    border-radius: 999px !important;
+    outline: 0 !important;
+    color: rgba(239, 242, 244, 0.82) !important;
+    background: rgba(13, 19, 24, 0.86) !important;
+    box-shadow: none !important;
+    filter: none !important;
+    appearance: none !important;
+    overflow: hidden !important;
+  }
+
+  .mobile-camera-actions .mobile-speed {
+    display: grid !important;
+    grid-template-columns: 22px minmax(0, 1fr) 22px !important;
+    align-items: center !important;
+  }
+
+  .mobile-camera-actions .mobile-speed button {
+    width: 22px !important;
+    min-width: 22px !important;
+    height: 30px !important;
+    min-height: 30px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    color: inherit !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .mobile-camera-actions .mobile-arm-button.is-active,
+  .mobile-camera-actions .mobile-avoidance-button.is-active {
+    border-color: rgba(42, 169, 224, 0.62) !important;
+    color: #69c9ee !important;
+    background: rgba(13, 19, 24, 0.86) !important;
+    box-shadow: none !important;
+  }
+
+  .mobile-camera-actions .mobile-emergency,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-emergency {
+    border-color: rgba(183, 58, 58, 0.64) !important;
+    color: #fff !important;
+    background: rgba(160, 45, 45, 0.92) !important;
+  }
+
+  :root[data-theme="light"] .mobile-camera-actions .mobile-arm-button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-avoidance-button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-posture-actions button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed {
+    border-color: rgba(42, 169, 224, 0.3) !important;
+    color: #40535e !important;
+    background: rgba(246, 249, 251, 0.98) !important;
+  }
+
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed strong {
+    color: #40535e !important;
+  }
+
+  .mobile-camera-actions button:disabled {
+    opacity: 0.68 !important;
+  }
+
+  :root[data-theme="light"] .mobile-camera-actions .mobile-arm-button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-avoidance-button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-posture-actions button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-emergency {
+    font-size: 7.25px !important;
+    font-weight: 800 !important;
+  }
+
+  :root[data-theme="light"] .mobile-camera-actions .mobile-arm-button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-avoidance-button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-posture-actions button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed button,
+  :root[data-theme="light"] .mobile-camera-actions .mobile-speed strong {
+    border-color: rgba(21, 126, 169, 0.48) !important;
+    color: #203b49 !important;
+    background: #ffffff !important;
+  }
+
+  :root[data-theme="light"] .mobile-camera-actions button:disabled {
+    color: #344d59 !important;
+    opacity: 0.88 !important;
+  }
+
+  :root[data-theme="dark"] .mobile-joystick__axis {
+    display: none !important;
+  }
+
+  .mobile-camera-controls .mobile-joystick {
+    right: max(8px, env(safe-area-inset-right)) !important;
+    bottom: max(7px, env(safe-area-inset-bottom)) !important;
+    left: auto !important;
+  }
+
+  .mobile-joystick.is-disabled {
+    filter: none !important;
+    opacity: 1 !important;
+  }
+
+  .mobile-joystick__label b,
+  .mobile-joystick.is-disabled .mobile-joystick__label b,
+  :root[data-theme="light"] .mobile-joystick__label b,
+  :root[data-theme="light"] .mobile-joystick.is-disabled .mobile-joystick__label b {
+    color: #149bd2 !important;
+    opacity: 1 !important;
+  }
+
+  :root[data-theme="light"] .mobile-joystick__surface {
+    border: 1px solid rgba(42, 169, 224, 0.42) !important;
+    background: rgba(249, 252, 253, 0.72) !important;
+    box-shadow: inset 0 0 20px rgba(42, 169, 224, 0.06) !important;
+  }
+}

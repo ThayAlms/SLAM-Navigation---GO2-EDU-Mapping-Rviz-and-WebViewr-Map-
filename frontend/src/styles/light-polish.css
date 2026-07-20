@@ -254,3 +254,115 @@
     box-shadow: 0 20px 56px rgba(31, 72, 96, 0.14);
   }
 }
+
+/* ================================================================
+   Modo claro: painel de operação em cinza sólido e opaco — nem
+   branco estourado, nem escuro. Sem transparência/blur empilhados
+   (evita a linha/"quadrado" visível entre o título e os cartões).
+   ================================================================ */
+
+:root[data-theme="light"] .dashboard-grid {
+  border: 1px solid #d7dee4 !important;
+  background: #eef1f4 !important;
+  box-shadow: 0 20px 50px rgba(20, 40, 55, 0.1) !important;
+  backdrop-filter: none !important;
+}
+
+:root[data-theme="light"] .operation-hud {
+  border-bottom: 1px solid #d7dee4 !important;
+  background: #eef1f4 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+:root[data-theme="light"] .operation-statuses > span {
+  border-color: #d3dae1 !important;
+  color: #45535c !important;
+  background: #e3e8ec !important;
+  box-shadow: none !important;
+}
+
+:root[data-theme="light"] .operation-statuses > span:first-child {
+  border-color: rgba(42, 169, 224, 0.4) !important;
+  color: #0a6f9c !important;
+  background: rgba(42, 169, 224, 0.1) !important;
+}
+
+:root[data-theme="light"] .video-panel,
+:root[data-theme="light"] .navigation-panel {
+  background: transparent !important;
+}
+
+:root[data-theme="light"] .viewport-controls .oracle-button,
+:root[data-theme="light"] .viewport-action,
+:root[data-theme="light"] .viewport-action--primary {
+  border-color: #c7d0d7 !important;
+  color: #1b2933 !important;
+  background: #f4f6f8 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+:root[data-theme="light"] .viewport-controls button:not(:disabled):hover {
+  border-color: #2aa9e0 !important;
+  color: #0878a5 !important;
+  background: rgba(42, 169, 224, 0.13) !important;
+  box-shadow: none !important;
+}
+
+/* O painel inteiro (título + cartões) usa o mesmo tom sólido, sem
+   camadas translúcidas — assim o topo arredonda de forma contínua,
+   sem costura entre o cabeçalho e a grade de cartões. */
+:root[data-theme="light"] .teleoperation-panel {
+  border-color: #cfd8de !important;
+  background: #eef1f4 !important;
+  box-shadow: 0 20px 50px rgba(20, 40, 55, 0.1) !important;
+  backdrop-filter: none !important;
+}
+
+:root[data-theme="light"] .teleoperation-heading h2 {
+  color: #101820 !important;
+}
+
+:root[data-theme="light"] .teleoperation-card__header strong {
+  color: #1b2933 !important;
+}
+
+:root[data-theme="light"] .teleoperation-grid {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+:root[data-theme="light"] .teleoperation-card {
+  border-color: #d7dee4 !important;
+}
+
+:root[data-theme="light"] .teleoperation-arm-button,
+:root[data-theme="light"] .teleoperation-avoidance-button,
+:root[data-theme="light"] .teleoperation-posture button,
+:root[data-theme="light"] .teleoperation-key,
+:root[data-theme="light"] .teleoperation-speed__button {
+  border-color: #c7d0d7 !important;
+  color: #1b2933 !important;
+  background: #f4f6f8 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+:root[data-theme="light"] .teleoperation-speed strong,
+:root[data-theme="light"] .teleoperation-posture span,
+:root[data-theme="light"] .teleoperation-key span {
+  color: #0a7cae !important;
+}
+
+:root[data-theme="light"] .status-card {
+  border-color: #d7dee4 !important;
+  color: #1b2933 !important;
+  background: #eef1f4 !important;
+  box-shadow: none !important;
+}
+
+:root[data-theme="light"] .status-card span {
+  color: #5a6b76 !important;
+}

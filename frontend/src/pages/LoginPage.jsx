@@ -4,6 +4,7 @@ import { useNavigate } from "react-router";
 import AppHeader from "../components/AppHeader";
 import SlamBackground from "../components/SlamBackground";
 import { useAuth } from "../context/useAuth";
+import go2LoginUrl from "../assets/go2-login.png";
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -49,10 +50,16 @@ function LoginPage() {
     <div className="app-layout login-layout">
       <AppHeader />
       <SlamBackground className="login-slam-background" variant="login" />
+      <img
+        className="login-go2"
+        src={go2LoginUrl}
+        alt=""
+        aria-hidden="true"
+      />
 
       <main className="login-page">
         <section className="login-card" aria-label="Acesso do operador">
-          <div className="login-header">
+          <div className="login-header login-header--pill">
             <h2>Acessar plataforma</h2>
             <p>Informe suas credenciais para continuar.</p>
           </div>
@@ -104,6 +111,14 @@ function LoginPage() {
               disabled={isSubmitting || !isConfigured}
             >
               {isSubmitting ? "Entrando..." : "Entrar"}
+            </button>
+
+            <button
+              className="login-demo-button"
+              type="button"
+              onClick={() => navigate("/demo")}
+            >
+              Acessar demonstração
             </button>
           </form>
         </section>

@@ -6,7 +6,7 @@ import oracleLogo from "../../logos/Oracle-Logo.png";
 import { useAuth } from "../context/useAuth";
 import { useTheme } from "../context/useTheme";
 
-function AppHeader({ showLogout = false }) {
+function AppHeader({ showLogout = false, demoMode = false }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { signOut, user } = useAuth();
@@ -45,7 +45,7 @@ function AppHeader({ showLogout = false }) {
   }, []);
 
   function handleLogoClick() {
-    navigate(showLogout ? "/dashboard" : "/login");
+    navigate(demoMode ? "/demo" : showLogout ? "/dashboard" : "/login");
   }
 
   async function handleLogout() {
@@ -99,6 +99,9 @@ function AppHeader({ showLogout = false }) {
               ) : (
                 <>
                   <button type="button" onClick={() => navigate("/login")}>Acesso do operador</button>
+                  {demoMode && (
+                    <button type="button" onClick={() => navigateFromMenu("/demo")}>Demonstração interativa</button>
+                  )}
                   <span className="header-menu-note">XD4 Robotics × Oracle</span>
                 </>
               )}
@@ -126,6 +129,18 @@ function AppHeader({ showLogout = false }) {
             <img className="app-header-oracle-logo" src={oracleLogo} alt="Oracle" />
           </span>
         </div>
+
+        {isLogin && (
+          <div className="app-header-actions">
+            <button
+              type="button"
+              className="header-demo-button"
+              onClick={() => navigate("/demo")}
+            >
+              Ver demonstração
+            </button>
+          </div>
+        )}
 
         {!isLogin && <div className="app-header-actions">
           <button
