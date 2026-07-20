@@ -45,12 +45,16 @@ em contexto seguro, no notebook abra um túnel SSH para a Jetson:
 ssh -N -L 5173:127.0.0.1:5173 unitree@IP_DA_JETSON
 ```
 
-Em seguida, abra `http://localhost:5173`, conecte o controle por cabo e
-pressione qualquer botão. Chrome, Edge e Firefox atuais usam o mapeamento
-padronizado para controles PS4/PS5/Xbox.
+Na Vercel, basta abrir o painel HTTPS, conectar o controle por cabo e pressionar
+qualquer botão ou manche. Chrome, Edge e Firefox atuais normalizam controles
+PS4/PS5/Xbox/Switch conhecidos; o painel adapta automaticamente também o layout
+DirectInput comum de Logitech, 8BitDo e controles USB genéricos. Não há
+instalação ou calibração manual. O túnel acima só é necessário no desenvolvimento
+local.
 
 - Manche esquerdo: frente/ré e deslocamento lateral.
 - Manche direito horizontal: giro.
+- Direcional: frente/ré e giro.
 - `START`/`Options`: habilita o canal de controle.
 - `L2 + B`/Círculo: damping de emergência.
 - `L2 + X`/Quadrado: recuperar e levantar (RecoveryStand oficial).

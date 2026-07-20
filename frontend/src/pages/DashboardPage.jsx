@@ -590,14 +590,14 @@ function DashboardPage({ demoMode = false }) {
       ? "Controle USB exige acesso local seguro"
       : gamepad.connected
         ? `${gamepad.name} conectado`
-        : "PS4, PS5 ou Xbox via USB";
+        : "Controle USB detectado automaticamente";
   const gamepadDescription = !gamepad.supported
     ? "Use uma versão atual do Chrome, Edge ou Firefox."
     : !gamepad.secureContext
       ? "Abra o painel por http://localhost:5173 usando o túnel SSH."
       : gamepad.connected
-        ? "Manche E: mover · manche D: girar · START/Options: habilitar"
-        : "Conecte o cabo e pressione qualquer botão para ativar.";
+        ? "Detectado automaticamente · START/Options habilita o robô"
+        : "Conecte o cabo e use o controle; nenhum programa é necessário.";
 
   return (
     <div className="app-layout">

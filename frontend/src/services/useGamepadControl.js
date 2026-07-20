@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 
 import {
+  gamepadAxisBaselines,
   gamepadDisplayName,
   hasGamepadMotion,
-  isGamepadButtonPressed,
   isGamepadChordActivated,
+  readGamepadControls,
   readGamepadMotion,
+  resolveGamepadLayout,
 } from "./gamepad";
 
 const STANDALONE_BUTTON_GRACE_MS = 250;
@@ -46,7 +48,8 @@ export function useGamepadControl({ canMove, onMotion, onStop, onAction }) {
     let animationFrame = null;
     let activeIndex = null;
     let isMoving = false;
-    let previousButtons = [];
+    let previousControls = {};
+    let axisBaselines = [];
     let avoidanceOffStartedAt = null;
     let avoidanceOffSent = false;
     let avoidanceOnStartedAt = null;
@@ -73,14 +76,15 @@ export function useGamepadControl({ canMove, onMotion, onStop, onAction }) {
       callbacksRef.current.onStop();
     }
 
-    function rising(buttons, index) {
-      return isGamepadButtonPressed(buttons, index) && !previousButtons[index];
+    function rising(controls, control) {
+      return Boolean(controls[control] && !previousControls[control]);
     }
 
     function readButtons(gamepad, now) {
-      const buttons = gamepad.buttons || [];
-      const l2 = isGamepadButtonPressed(buttons, 6);
-      const squareOrX = isGamepadButtonPressed(buttons, 2);
+      const layout = resolveGamepadLayout(gamepad);
+      const controls = readGamepadControls(gamepad, layout);
+      const l2 = controls.leftTrigger;
+      const squareOrX = controls.faceLeft;
       let actionTriggered = false;
 
       function emitAction(action) {
@@ -88,22 +92,37 @@ export function useGamepadControl({ canMove, onMotion, onStop, onAction }) {
         callbacksRef.current.onAction(action);
       }
 
-      // Layout padrão dos navegadores: A/Cross=0, B/Circle=1,
-      // X/Square=2, Y/Triangle=3, L2=6 e START/Options=9.
-      if (isGamepadChordActivated(buttons, previousButtons, 6, 1)) {
+      // Os controles físicos são normalizados antes das ações. Assim, os
+      // mesmos atalhos funcionam no layout padrão e no DirectInput genérico.
+      if (isGamepadChordActivated(
+        controls,
+        previousControls,
+        "leftTrigger",
+        "faceRight",
+      )) {
         emitAction("damping");
-      } else if (isGamepadChordActivated(buttons, previousButtons, 6, 2)) {
+      } else if (isGamepadChordActivated(
+        controls,
+        previousControls,
+        "leftTrigger",
+        "faceLeft",
+      )) {
         emitAction("recovery_stand");
-      } else if (isGamepadChordActivated(buttons, previousButtons, 6, 0)) {
+      } else if (isGamepadChordActivated(
+        controls,
+        previousControls,
+        "leftTrigger",
+        "faceBottom",
+      )) {
         emitAction("toggle_posture");
-      } else if (rising(buttons, 9) && !l2) {
+      } else if (rising(controls, "start") && !l2) {
         emitAction("arm");
       }
 
       if (!squareOrX || l2) {
         avoidanceOnStartedAt = null;
         avoidanceOnSent = false;
-      } else if (!previousButtons[2]) {
+      } else if (!previousControls.faceLeft) {
         avoidanceOnStartedAt = now;
         avoidanceOnSent = false;
       } else if (
@@ -115,8 +134,8 @@ export function useGamepadControl({ canMove, onMotion, onStop, onAction }) {
         emitAction("avoidance_on");
       }
 
-      const avoidanceOffPressed = isGamepadButtonPressed(buttons, 3) && !l2;
-      if (avoidanceOffPressed && !previousButtons[3]) {
+      const avoidanceOffPressed = controls.faceTop && !l2;
+      if (avoidanceOffPressed && !previousControls.faceTop) {
         avoidanceOffStartedAt = now;
         avoidanceOffSent = false;
       } else if (
@@ -132,11 +151,8 @@ export function useGamepadControl({ canMove, onMotion, onStop, onAction }) {
         avoidanceOffSent = false;
       }
 
-      previousButtons = Array.from(
-        buttons,
-        (_, index) => isGamepadButtonPressed(buttons, index),
-      );
-      return actionTriggered;
+      previousControls = controls;
+      return { actionTriggered, controls, layout };
     }
 
     function gamepadAt(index) {
@@ -162,7 +178,8 @@ export function useGamepadControl({ canMove, onMotion, onStop, onAction }) {
       if (!gamepad) {
         if (activeIndex !== null) {
           activeIndex = null;
-          previousButtons = [];
+          previousControls = {};
+          axisBaselines = [];
           publishState(null);
           stopGamepadMotion();
         }
@@ -172,15 +189,22 @@ export function useGamepadControl({ canMove, onMotion, onStop, onAction }) {
 
       if (gamepad.index !== activeIndex) {
         activeIndex = gamepad.index;
-        previousButtons = [];
+        previousControls = {};
+        axisBaselines = gamepadAxisBaselines(gamepad);
         publishState(gamepad);
       }
 
-      if (readButtons(gamepad, now)) {
+      const input = readButtons(gamepad, now);
+      if (input.actionTriggered) {
         movementSuppressed = true;
         stopGamepadMotion();
       }
-      const vector = readGamepadMotion(gamepad);
+      const vector = readGamepadMotion(
+        gamepad,
+        input.layout,
+        input.controls,
+        input.layout.kind === "generic" ? axisBaselines : null,
+      );
       const hasMotion = hasGamepadMotion(vector);
       if (!hasMotion) movementSuppressed = false;
       if (
@@ -198,14 +222,19 @@ export function useGamepadControl({ canMove, onMotion, onStop, onAction }) {
     }
 
     function handleConnected(event) {
-      if (activeIndex === null) activeIndex = event.gamepad.index;
-      publishState(event.gamepad);
+      if (activeIndex === null) {
+        activeIndex = event.gamepad.index;
+        previousControls = {};
+        axisBaselines = gamepadAxisBaselines(event.gamepad);
+      }
+      if (event.gamepad.index === activeIndex) publishState(event.gamepad);
     }
 
     function handleDisconnected(event) {
       if (event.gamepad.index !== activeIndex) return;
       activeIndex = null;
-      previousButtons = [];
+      previousControls = {};
+      axisBaselines = [];
       publishState(null);
       stopGamepadMotion();
     }

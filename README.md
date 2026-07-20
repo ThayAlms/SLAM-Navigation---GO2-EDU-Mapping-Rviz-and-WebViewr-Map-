@@ -250,6 +250,7 @@ Depois do login, o usuário comum entra diretamente nos recursos operacionais pe
 | Ativar / Desativar Obstacle Avoidance | alternar e confirmar o estado do serviço nativo |
 | Manche esquerdo USB | frente/ré e deslocamento lateral analógico |
 | Manche direito USB | giro analógico |
+| Direcional USB | frente/ré e giro, inclusive em controles sem manches |
 | `START`/`Options` | habilitar o canal de controle |
 | `L2 + B`/Círculo | damping de emergência |
 | `L2 + X`/Quadrado | recuperar e levantar (RecoveryStand oficial) |
@@ -259,9 +260,21 @@ Depois do login, o usuário comum entra diretamente nos recursos operacionais pe
 
 Para mover, o operador precisa habilitar o controle, o robô precisa estar em pé e o estado solicitado do Obstacle Avoidance precisa estar confirmado. Um heartbeat é enviado enquanto a tecla permanece pressionada; ao soltar a tecla o painel envia parada imediatamente e o watchdog do gateway aplica uma segunda parada em até `0,25 s` se os comandos cessarem.
 
-Para usar um controle conectado por cabo ao notebook, inicie `./run_web.sh` na
-Jetson e, em outro terminal do notebook, crie o túnel local exigido pela
-segurança da Gamepad API:
+Na versão publicada na Vercel, o operador só precisa abrir o painel HTTPS,
+conectar o controle ao notebook e pressionar qualquer botão ou manche. Não é
+necessário instalar aplicativo, driver adicional, executar comando ou calibrar
+o controle. O navegador normaliza automaticamente PS4, PS5, Xbox e Switch; o
+painel também adapta o layout DirectInput comum de Logitech, 8BitDo e controles
+USB genéricos.
+
+Por proteção de privacidade da Gamepad API, o navegador só revela um controle à
+página após a primeira interação com um botão ou manche. O sistema operacional
+do notebook ainda precisa reconhecer o dispositivo USB; uma página web não tem
+permissão para instalar drivers. A habilitação por `START`/`Options` permanece
+intencional para impedir que conectar um controle mova o robô sozinho.
+
+Para desenvolvimento local, inicie `./run_web.sh` na Jetson e, em outro terminal
+do notebook, crie o túnel local exigido pela segurança da Gamepad API:
 
 ```bash
 ssh -N -L 5173:127.0.0.1:5173 unitree@IP-DA-JETSON

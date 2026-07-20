@@ -1,4 +1,15 @@
 {
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Permissions-Policy",
+          "value": "gamepad=(self)"
+        }
+      ]
+    }
+  ],
   "rewrites": [
     {
       "source": "/(.*)",
