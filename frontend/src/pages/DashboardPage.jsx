@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import AppHeader from "../components/AppHeader";
 import MobileJoystick from "../components/MobileJoystick";
+import OnlineUsersPresence from "../components/OnlineUsersPresence";
 import OracleButton from "../components/OracleButton";
 import PointCloudMap from "../components/PointCloudMap";
 import RobotCamera from "../components/RobotCamera";
@@ -807,6 +808,7 @@ function DashboardPage({ demoMode = false }) {
               <span>LIO + IMU · <strong className={robotStatus.lio_connected ? "is-online" : "is-offline"}>{robotStatus.lio_connected ? "ESTÁVEL" : "AGUARDANDO"}</strong></span>
               <span>CÂMERA · <strong className={robotStatus.camera_connected ? "is-online" : "is-offline"}>{robotStatus.camera_connected ? "AO VIVO" : "SEM SINAL"}</strong></span>
               <span>MAPA · <strong>{Number(robotStatus.point_count || 0).toLocaleString("pt-BR")} PTS</strong></span>
+              <OnlineUsersPresence enabled={!demoMode} />
             </div>
           </div>
           <article className="panel video-panel" aria-label="Câmera frontal">
