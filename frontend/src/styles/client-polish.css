@@ -36,6 +36,42 @@
   }
 }
 
+/* Mensagens de conexão e comandos funcionam como toast. Por estarem fora do
+   fluxo visual, nunca aumentam a altura da Central de comandos. */
+@media (min-width: 768px) and (min-height: 561px) {
+  .teleoperation-panel > .operation-message {
+    position: fixed;
+    right: auto;
+    bottom: max(18px, env(safe-area-inset-bottom));
+    left: 50%;
+    z-index: 2500;
+    width: min(460px, calc(100vw - 32px));
+    margin: 0 !important;
+    padding: 10px 16px;
+    overflow: hidden;
+    border: 1px solid rgba(42, 169, 224, 0.5);
+    border-radius: 999px;
+    color: #eaf8ff;
+    background: rgba(5, 16, 23, 0.94);
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
+    backdrop-filter: blur(12px);
+    font-size: 11px;
+    line-height: 1.35;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transform: translateX(-50%);
+    pointer-events: none;
+  }
+
+  :root[data-theme="light"] .teleoperation-panel > .operation-message {
+    border-color: rgba(18, 128, 176, 0.42);
+    color: #173847;
+    background: rgba(248, 252, 254, 0.96);
+    box-shadow: 0 12px 34px rgba(25, 72, 96, 0.18);
+  }
+}
+
 /* No celular deitado, o seletor deixa o centro da câmera livre e passa a
    ocupar um canto previsível, sem interferir no joystick nem nos atalhos. */
 @media (orientation: landscape) and (max-width: 1199px) and (max-height: 560px) {
@@ -72,88 +108,6 @@
   }
 }
 
-/* No tema claro, a nuvem geral continua discreta enquanto as duas marcas
-   desenhadas por pontos permanecem legíveis e refinadas. */
-:root[data-theme="light"] .login-slam-background {
-  z-index: 1 !important;
-  opacity: 0.86 !important;
-  filter: saturate(1.2) contrast(1.08) !important;
-}
-
-.login-point-brands {
-  display: none;
-}
-
-:root[data-theme="light"] .login-point-brands {
-  position: fixed;
-  inset: var(--header-height) 0 0;
-  z-index: 1;
-  display: block;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.login-point-brand {
-  position: absolute;
-  left: clamp(18px, 2.8vw, 46px);
-  display: block;
-  width: clamp(150px, 19vw, 280px);
-  aspect-ratio: 1;
-  background-image: radial-gradient(
-    circle,
-    currentColor 0 1px,
-    transparent 1.3px
-  );
-  background-size: 6px 6px;
-  opacity: 0.34;
-  animation: login-point-brand-float 9s ease-in-out infinite alternate;
-}
-
-.login-point-brand--oracle {
-  top: 12%;
-  color: #a72d28;
-  -webkit-mask: url("../../logos/oraclefundo.png") center / contain no-repeat;
-  mask: url("../../logos/oraclefundo.png") center / contain no-repeat;
-}
-
-.login-point-brand--xd4 {
-  bottom: 5%;
-  color: #0879aa;
-  -webkit-mask: url("../../logos/iconexd4.svg") center / contain no-repeat;
-  mask: url("../../logos/iconexd4.svg") center / contain no-repeat;
-  animation-delay: -4.5s;
-}
-
-@keyframes login-point-brand-float {
-  from {
-    opacity: 0.27;
-    transform: translate3d(0, -3px, 0) scale(0.985);
-  }
-
-  to {
-    opacity: 0.4;
-    transform: translate3d(4px, 4px, 0) scale(1.015);
-  }
-}
-
-@media (max-width: 767px) and (orientation: portrait) {
-  .login-point-brand {
-    width: clamp(104px, 34vw, 148px);
-    opacity: 0.2;
-  }
-
-  .login-point-brand--oracle {
-    top: 4%;
-    right: -24px;
-    left: auto;
-  }
-
-  .login-point-brand--xd4 {
-    bottom: 2%;
-    left: -20px;
-  }
-}
-
 /* Reserva espaço real para as duas marcas no header autenticado estreito.
    Evita que a Oracle seja recortada entre menu e seletor de tema. */
 @media (max-width: 479px) and (orientation: portrait) {
@@ -184,11 +138,5 @@
     width: 64px !important;
     min-width: 64px !important;
     max-width: 64px !important;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .login-point-brand {
-    animation: none;
   }
 }

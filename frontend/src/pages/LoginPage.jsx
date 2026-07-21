@@ -50,10 +50,6 @@ function LoginPage() {
     <div className="app-layout login-layout">
       <AppHeader />
       <SlamBackground className="login-slam-background" variant="login" />
-      <div className="login-point-brands" aria-hidden="true">
-        <span className="login-point-brand login-point-brand--oracle" />
-        <span className="login-point-brand login-point-brand--xd4" />
-      </div>
       <img
         className="login-go2"
         src={go2LoginUrl}

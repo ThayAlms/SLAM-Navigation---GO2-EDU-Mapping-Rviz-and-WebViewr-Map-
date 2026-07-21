@@ -77,8 +77,8 @@ function SlamBackground({ className = "", variant = "default" }) {
         ]);
         if (disposed) return;
         brandTemplates = {
-          xd4: sampleMark(xd4Mark, 2500),
-          oracle: sampleMark(oracleMark, 2500),
+          xd4: sampleMark(xd4Mark, 2300),
+          oracle: sampleMark(oracleMark, 2300),
         };
         buildParticles();
       } catch {
@@ -230,8 +230,6 @@ function SlamBackground({ className = "", variant = "default" }) {
     function render(time) {
       context.clearRect(0, 0, width, height);
       drawGrid();
-      const lightLogin = variant === "login"
-        && document.documentElement.dataset.theme === "light";
       const darkDashboard = variant !== "login"
         && document.documentElement.dataset.theme === "dark";
       particles.forEach((particle, index) => {
@@ -244,24 +242,19 @@ function SlamBackground({ className = "", variant = "default" }) {
         const wave = Math.sin(time * 0.0007 + particle.phase) * waveScale;
         const pulse = 0.34 + particle.z * 0.38 + Math.sin(time * 0.001 + particle.phase) * 0.1;
         const alpha = particle.brand
-          ? Math.min(lightLogin ? 0.98 : 0.94, pulse + (lightLogin ? 0.42 : 0.34))
+          ? Math.min(0.94, pulse + 0.34)
           : particle.brandHalo
-          ? Math.min(lightLogin ? 0.3 : 0.5, pulse * (lightLogin ? 0.38 : 0.58))
-          : variant === "login"
-            ? Math.min(lightLogin ? 0.38 : 0.82, pulse * (lightLogin ? 0.48 : 1) + 0.1)
+          ? Math.min(0.5, pulse * 0.58)
+          : variant === "login" ? Math.min(0.82, pulse + 0.1)
           : Math.min(0.9, pulse + 0.12);
         const renderedAlpha = darkDashboard ? alpha * 0.72 : alpha;
         if (particle.tone === "red") {
-          context.fillStyle = lightLogin
-            ? `rgba(166, 43, 36, ${renderedAlpha})`
-            : `rgba(199, 70, 52, ${renderedAlpha})`;
+          context.fillStyle = `rgba(199, 70, 52, ${renderedAlpha})`;
         } else {
-          context.fillStyle = lightLogin
-            ? `rgba(11, 118, 164, ${renderedAlpha})`
-            : `rgba(42, 169, 224, ${renderedAlpha})`;
+          context.fillStyle = `rgba(42, 169, 224, ${renderedAlpha})`;
         }
         const size = particle.brand
-          ? (lightLogin ? 0.68 + particle.z * 1.08 : 0.85 + particle.z * 1.35)
+          ? 0.85 + particle.z * 1.35
           : variant === "login"
           ? 0.65 + particle.z * 1.25
           : 0.72 + particle.z * 1.45;
