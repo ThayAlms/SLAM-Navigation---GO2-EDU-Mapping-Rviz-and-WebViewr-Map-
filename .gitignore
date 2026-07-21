@@ -33,3 +33,5 @@ go2_native_ws/unitree_ros2/cyclonedds_ws/log/
 # Autosaves gerados ao encerrar o gateway do robô
 go2_native_ws/maps/autosave_*.json
 go2_native_ws/maps/autosave_*.pcd
+.vercel
+.env*

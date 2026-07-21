@@ -40,3 +40,5 @@ Desktop.ini
 # Vite/local tooling caches
 .vite/
 *.local
+.vercel
+.env*
