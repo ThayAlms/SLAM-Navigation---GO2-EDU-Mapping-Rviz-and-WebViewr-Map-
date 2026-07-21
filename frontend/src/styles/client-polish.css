@@ -1,5 +1,9 @@
 /* Ajustes finais de apresentação para a operação em produção. */
 
+.control-mode-selector--hud {
+  display: none;
+}
+
 /* A seleção do controle e o estado USB mantêm uma caixa compacta e estável.
    A altura não muda quando o navegador identifica um dispositivo. */
 @media (min-width: 1024px) and (min-height: 561px) {
@@ -72,29 +76,38 @@
   }
 }
 
-/* No celular deitado, o seletor deixa o centro da câmera livre e passa a
-   ocupar um canto previsível, sem interferir no joystick nem nos atalhos. */
+/* No celular deitado, o seletor sai da câmera e passa a integrar a faixa
+   horizontal dos indicadores. */
 @media (orientation: landscape) and (max-width: 1199px) and (max-height: 560px) {
   .video-panel .control-mode-selector--mobile {
-    top: max(8px, env(safe-area-inset-top)) !important;
-    right: max(8px, env(safe-area-inset-right)) !important;
-    left: auto !important;
-    width: 154px !important;
-    min-width: 0 !important;
-    max-width: 154px !important;
-    transform: none !important;
+    display: none !important;
   }
 
-  .video-panel .control-mode-selector--mobile > button {
-    min-height: 30px !important;
+  .operation-statuses > .control-mode-selector--hud {
+    display: grid;
+    flex: 0 0 154px;
+    order: -10;
+    width: 154px !important;
+    min-width: 154px !important;
+    max-width: 154px !important;
+    min-height: 32px;
+    max-height: 32px;
+    padding: 2px;
+    scroll-snap-align: start;
+    transform: none;
+  }
+
+  .operation-statuses > .control-mode-selector--hud > button {
+    min-height: 26px !important;
+    height: 26px;
     padding-inline: 4px !important;
   }
 
-  .video-panel .control-mode-selector--mobile > button > span {
+  .operation-statuses > .control-mode-selector--hud > button > span {
     display: none;
   }
 
-  .video-panel .control-mode-selector--mobile > button strong {
+  .operation-statuses > .control-mode-selector--hud > button strong {
     font-size: 7px !important;
   }
 
@@ -105,6 +118,14 @@
 
   .mobile-speed__metric {
     display: none;
+  }
+}
+
+/* O total de usuários é a primeira informação da faixa no mobile. */
+@media (max-width: 767px),
+  (orientation: landscape) and (max-width: 1199px) and (max-height: 560px) {
+  .operation-statuses > .online-users-presence {
+    order: -20;
   }
 }
 

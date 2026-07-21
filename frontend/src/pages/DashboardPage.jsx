@@ -123,11 +123,12 @@ function ControlModeSelector({
   gamepadConnected,
   gamepadAvailable,
   mobile = false,
+  hud = false,
   onSelect,
 }) {
   return (
     <div
-      className={`control-mode-selector ${mobile ? "control-mode-selector--mobile" : ""}`}
+      className={`control-mode-selector ${mobile ? "control-mode-selector--mobile" : ""} ${hud ? "control-mode-selector--hud" : ""}`}
       role="group"
       aria-label="Fonte do controle de movimento"
     >
@@ -817,6 +818,13 @@ function DashboardPage({ demoMode = false }) {
               <span>CÂMERA · <strong className={robotStatus.camera_connected ? "is-online" : "is-offline"}>{robotStatus.camera_connected ? "AO VIVO" : "SEM SINAL"}</strong></span>
               <span>MAPA · <strong>{Number(robotStatus.point_count || 0).toLocaleString("pt-BR")} PTS</strong></span>
               <OnlineUsersPresence enabled={!demoMode} />
+              <ControlModeSelector
+                mode={controlMode}
+                gamepadConnected={controllerConnected}
+                gamepadAvailable={controllerSupported && gamepad.secureContext}
+                hud
+                onSelect={selectControlMode}
+              />
             </div>
           </div>
           <article className="panel video-panel" aria-label="Câmera frontal">
