@@ -1,0 +1,194 @@
+/* Ajustes finais de apresentação para a operação em produção. */
+
+/* A seleção do controle e o estado USB mantêm uma caixa compacta e estável.
+   A altura não muda quando o navegador identifica um dispositivo. */
+@media (min-width: 1024px) and (min-height: 561px) {
+  .teleoperation-card--direction > .control-mode-selector {
+    align-self: center;
+    width: min(100%, 220px);
+    min-height: 44px;
+    max-height: 44px;
+  }
+
+  .teleoperation-card--direction > .gamepad-status {
+    align-self: center;
+    width: min(100%, 236px);
+    min-height: 44px;
+    max-height: 44px;
+    padding: 6px 8px;
+    overflow: hidden;
+  }
+
+  .teleoperation-card--direction > .gamepad-status .gamepad-status__icon {
+    font-size: 14px;
+  }
+
+  .teleoperation-card--direction > .gamepad-status strong {
+    font-size: 8px;
+  }
+
+  .teleoperation-card--direction > .gamepad-status small {
+    font-size: 7px;
+  }
+
+  .teleoperation-card--direction > .teleoperation-pad {
+    margin-top: 2px;
+  }
+}
+
+/* No celular deitado, o seletor deixa o centro da câmera livre e passa a
+   ocupar um canto previsível, sem interferir no joystick nem nos atalhos. */
+@media (orientation: landscape) and (max-width: 1199px) and (max-height: 560px) {
+  .video-panel .control-mode-selector--mobile {
+    top: max(8px, env(safe-area-inset-top)) !important;
+    right: max(8px, env(safe-area-inset-right)) !important;
+    left: auto !important;
+    width: 154px !important;
+    min-width: 0 !important;
+    max-width: 154px !important;
+    transform: none !important;
+  }
+
+  .video-panel .control-mode-selector--mobile > button {
+    min-height: 30px !important;
+    padding-inline: 4px !important;
+  }
+
+  .video-panel .control-mode-selector--mobile > button > span {
+    display: none;
+  }
+
+  .video-panel .control-mode-selector--mobile > button strong {
+    font-size: 7px !important;
+  }
+
+  .mobile-speed strong {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .mobile-speed__metric {
+    display: none;
+  }
+}
+
+/* No tema claro, a nuvem geral continua discreta enquanto as duas marcas
+   desenhadas por pontos permanecem legíveis e refinadas. */
+:root[data-theme="light"] .login-slam-background {
+  z-index: 1 !important;
+  opacity: 0.86 !important;
+  filter: saturate(1.2) contrast(1.08) !important;
+}
+
+.login-point-brands {
+  display: none;
+}
+
+:root[data-theme="light"] .login-point-brands {
+  position: fixed;
+  inset: var(--header-height) 0 0;
+  z-index: 1;
+  display: block;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.login-point-brand {
+  position: absolute;
+  left: clamp(18px, 2.8vw, 46px);
+  display: block;
+  width: clamp(150px, 19vw, 280px);
+  aspect-ratio: 1;
+  background-image: radial-gradient(
+    circle,
+    currentColor 0 1px,
+    transparent 1.3px
+  );
+  background-size: 6px 6px;
+  opacity: 0.34;
+  animation: login-point-brand-float 9s ease-in-out infinite alternate;
+}
+
+.login-point-brand--oracle {
+  top: 12%;
+  color: #a72d28;
+  -webkit-mask: url("../../logos/oraclefundo.png") center / contain no-repeat;
+  mask: url("../../logos/oraclefundo.png") center / contain no-repeat;
+}
+
+.login-point-brand--xd4 {
+  bottom: 5%;
+  color: #0879aa;
+  -webkit-mask: url("../../logos/iconexd4.svg") center / contain no-repeat;
+  mask: url("../../logos/iconexd4.svg") center / contain no-repeat;
+  animation-delay: -4.5s;
+}
+
+@keyframes login-point-brand-float {
+  from {
+    opacity: 0.27;
+    transform: translate3d(0, -3px, 0) scale(0.985);
+  }
+
+  to {
+    opacity: 0.4;
+    transform: translate3d(4px, 4px, 0) scale(1.015);
+  }
+}
+
+@media (max-width: 767px) and (orientation: portrait) {
+  .login-point-brand {
+    width: clamp(104px, 34vw, 148px);
+    opacity: 0.2;
+  }
+
+  .login-point-brand--oracle {
+    top: 4%;
+    right: -24px;
+    left: auto;
+  }
+
+  .login-point-brand--xd4 {
+    bottom: 2%;
+    left: -20px;
+  }
+}
+
+/* Reserva espaço real para as duas marcas no header autenticado estreito.
+   Evita que a Oracle seja recortada entre menu e seletor de tema. */
+@media (max-width: 479px) and (orientation: portrait) {
+  .app-header--authenticated .app-header-partners {
+    gap: 8px !important;
+    max-width: 174px !important;
+  }
+
+  .app-header--authenticated .partner-logo-slot:first-child {
+    flex: 0 0 76px !important;
+    width: 76px !important;
+  }
+
+  .app-header--authenticated .partner-logo-slot--oracle {
+    flex: 0 0 64px !important;
+    width: 64px !important;
+    min-width: 64px !important;
+    max-width: 64px !important;
+    overflow: visible !important;
+  }
+
+  .app-header--authenticated .app-header-logo {
+    width: 76px !important;
+    max-width: 76px !important;
+  }
+
+  .app-header--authenticated .app-header-oracle-logo {
+    width: 64px !important;
+    min-width: 64px !important;
+    max-width: 64px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-point-brand {
+    animation: none;
+  }
+}

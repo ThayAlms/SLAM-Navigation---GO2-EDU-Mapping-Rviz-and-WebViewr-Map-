@@ -21,6 +21,9 @@ import { useGamepadControl } from "../services/useGamepadControl";
 import { useHidGamepadControl } from "../services/useHidGamepadControl";
 import { useLiveKitRobot } from "../services/useLiveKitRobot";
 
+const OBSTACLE_AVOIDANCE_ADMIN_ONLY_MESSAGE =
+  "Somente administradores podem alterar o Obstacle Avoidance.";
+
 const OFFLINE_STATUS = {
   robot_online: false,
   network_online: false,
@@ -154,8 +157,9 @@ function ControlModeSelector({
 }
 
 function DashboardPage({ demoMode = false }) {
-  const { session } = useAuth();
+  const { session, user } = useAuth();
   const accessToken = session?.access_token;
+  const canManageObstacleAvoidance = user?.role === "admin";
   const [polledRobotStatus, setRobotStatus] = useState(OFFLINE_STATUS);
   const [demoRobotStatus, setDemoRobotStatus] = useState(DEMO_STATUS);
   const [points, setPoints] = useState(() => demoMode ? DEMO_POINTS : []);
@@ -486,6 +490,10 @@ function DashboardPage({ demoMode = false }) {
   }, [canMove, robotStatus.safety_blocked, stopMotion]);
 
   async function handleAction(command, payload, successMessage) {
+    if (command === "set_obstacle_avoidance" && !canManageObstacleAvoidance) {
+      setStatusMessage(OBSTACLE_AVOIDANCE_ADMIN_ONLY_MESSAGE);
+      return false;
+    }
     if ((!accessToken && !demoMode) || pendingActionRef.current) return false;
     pendingActionRef.current = command;
     stopMotion(false);
@@ -887,10 +895,24 @@ function DashboardPage({ demoMode = false }) {
                   </button>
 
                   <button
-                    className={`mobile-avoidance-button ${avoidanceRequested ? "is-active" : ""}`}
+                    className={`mobile-avoidance-button ${avoidanceRequested ? "is-active" : ""} ${!canManageObstacleAvoidance ? "is-role-locked" : ""}`}
                     type="button"
                     aria-pressed={avoidanceRequested}
-                    disabled={!robotStatus.sdk_connected || Boolean(pendingAction)}
+                    aria-label={
+                      canManageObstacleAvoidance
+                        ? `Anticolisão ${avoidanceRequested ? "ativado" : "desativado"}`
+                        : `${avoidanceRequested ? "Anticolisão ativado" : "Anticolisão desativado"}. Alteração restrita a administradores.`
+                    }
+                    title={
+                      canManageObstacleAvoidance
+                        ? undefined
+                        : OBSTACLE_AVOIDANCE_ADMIN_ONLY_MESSAGE
+                    }
+                    disabled={
+                      !canManageObstacleAvoidance ||
+                      !robotStatus.sdk_connected ||
+                      Boolean(pendingAction)
+                    }
                     onClick={() =>
                       handleAction(
                         "set_obstacle_avoidance",
@@ -902,6 +924,7 @@ function DashboardPage({ demoMode = false }) {
                     }
                   >
                     Anticolisão {avoidanceRequested ? "ON" : "OFF"}
+                    {!canManageObstacleAvoidance && " · ADM"}
                   </button>
 
                   <div className="mobile-posture-actions" aria-label="Ações de postura">
@@ -930,7 +953,12 @@ function DashboardPage({ demoMode = false }) {
                       disabled={!robotStatus.sdk_connected || speed <= speedMin || Boolean(pendingAction)}
                       onClick={() => handleSpeedChange(lowerSpeed)}
                     >−</button>
-                    <strong>{speed}% · {selectedForwardSpeed.toFixed(2)} m/s</strong>
+                    <strong>
+                      <span className="mobile-speed__percent">{speed}%</span>
+                      <span className="mobile-speed__metric">
+                        {" · "}{selectedForwardSpeed.toFixed(2)} m/s
+                      </span>
+                    </strong>
                     <button
                       type="button"
                       aria-label="Aumentar velocidade"
@@ -1009,10 +1037,21 @@ function DashboardPage({ demoMode = false }) {
               </button>
 
               <button
-                className={`ui-button teleoperation-avoidance-button ${avoidanceRequested ? "is-enabled" : "is-disabled"}`}
+                className={`ui-button teleoperation-avoidance-button ${avoidanceRequested ? "is-enabled" : "is-disabled"} ${!canManageObstacleAvoidance ? "is-role-locked" : ""}`}
                 type="button"
                 aria-pressed={avoidanceRequested}
+                aria-label={
+                  canManageObstacleAvoidance
+                    ? `${avoidanceRequested ? "Desativar" : "Ativar"} Obstacle Avoidance`
+                    : `${avoidanceRequested ? "Obstacle Avoidance ativo" : "Obstacle Avoidance inativo"}. Alteração restrita a administradores.`
+                }
+                title={
+                  canManageObstacleAvoidance
+                    ? undefined
+                    : OBSTACLE_AVOIDANCE_ADMIN_ONLY_MESSAGE
+                }
                 disabled={
+                  !canManageObstacleAvoidance ||
                   !robotStatus.sdk_connected ||
                   Boolean(pendingAction)
                 }
@@ -1027,14 +1066,18 @@ function DashboardPage({ demoMode = false }) {
                 }
               >
                 <strong>
-                  {avoidanceChanging
+                  {!canManageObstacleAvoidance
+                    ? `Obstacle Avoidance ${avoidanceRequested ? "ativo" : "inativo"}`
+                    : avoidanceChanging
                     ? "Confirmando Obstacle Avoidance..."
                     : avoidanceRequested
                       ? "Desativar Obstacle Avoidance"
                       : "Ativar Obstacle Avoidance"}
                 </strong>
                 <small>
-                  {avoidanceRequested
+                  {!canManageObstacleAvoidance
+                    ? "Somente administradores podem alterar esta função"
+                    : avoidanceRequested
                     ? avoidanceConfirmed
                       ? "Proteção nativa confirmada e ativa"
                       : "Solicitado · confirmação nativa indisponível"
