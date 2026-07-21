@@ -1,14 +1,31 @@
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { Navigate, useNavigate } from "react-router";
 
 import AppHeader from "../components/AppHeader";
 import SlamBackground from "../components/SlamBackground";
 import { useAuth } from "../context/useAuth";
 import go2LoginUrl from "../assets/go2-login.png";
 
+// Oferece ao navegador salvar as credenciais após um login bem-sucedido.
+// Sem suporte (Firefox/Safari), o próprio formulário já aciona o gerenciador.
+async function offerPasswordSave(email, password) {
+  try {
+    if (window.PasswordCredential) {
+      const credential = new window.PasswordCredential({
+        id: email,
+        name: email,
+        password,
+      });
+      await navigator.credentials.store(credential);
+    }
+  } catch {
+    // Guardar a senha é opcional; a entrada continua normalmente.
+  }
+}
+
 function LoginPage() {
   const navigate = useNavigate();
-  const { signIn, isConfigured } = useAuth();
+  const { signIn, isConfigured, session, isLoading } = useAuth();
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -16,6 +33,11 @@ function LoginPage() {
     email: "",
     password: "",
   });
+
+  // Sessão ativa vai direto para a home da operação.
+  if (!isLoading && session) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -38,6 +60,7 @@ function LoginPage() {
     setIsSubmitting(true);
     try {
       await signIn(formData.email, formData.password);
+      await offerPasswordSave(formData.email, formData.password);
       navigate("/dashboard", { replace: true });
     } catch (error) {
       setErrorMessage(error.message);
@@ -74,7 +97,7 @@ function LoginPage() {
                 type="email"
                 value={formData.email}
                 onChange={handleChange}
-                autoComplete="email"
+                autoComplete="username"
                 required
               />
             </label>
@@ -101,7 +124,7 @@ function LoginPage() {
 
             {!isConfigured && (
               <p className="form-message" role="status">
-                Configure o Supabase para habilitar o acesso.
+                Acesso indisponível neste ambiente. Contate o administrador.
               </p>
             )}
 

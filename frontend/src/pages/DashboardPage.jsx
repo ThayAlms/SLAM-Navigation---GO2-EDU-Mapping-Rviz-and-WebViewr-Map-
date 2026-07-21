@@ -8,6 +8,7 @@ import PointCloudMap from "../components/PointCloudMap";
 import RobotCamera from "../components/RobotCamera";
 import SlamBackground from "../components/SlamBackground";
 import { useAuth } from "../context/useAuth";
+import { useToast } from "../context/useToast";
 import {
   getRobotMap,
   getRobotStatus,
@@ -22,7 +23,7 @@ import { useHidGamepadControl } from "../services/useHidGamepadControl";
 import { useLiveKitRobot } from "../services/useLiveKitRobot";
 
 const OBSTACLE_AVOIDANCE_ADMIN_ONLY_MESSAGE =
-  "Somente administradores podem alterar o Obstacle Avoidance.";
+  "Somente administradores podem alterar o anticolisão.";
 
 const OFFLINE_STATUS = {
   robot_online: false,
@@ -53,39 +54,15 @@ const OFFLINE_STATUS = {
   remote_source_operational: false,
 };
 
-const DEMO_POINTS = Array.from({ length: 900 }, (_, index) => {
-  const ring = index % 90;
-  const layer = Math.floor(index / 90);
-  const angle = (ring / 90) * Math.PI * 2;
-  const radius = 2.1 + Math.sin(layer * 0.9 + angle * 3) * 0.34;
-  return [
-    Math.cos(angle) * radius,
-    Math.sin(angle) * radius,
-    layer * 0.12 + Math.sin(angle * 5) * 0.08,
-  ];
-}).flat();
-
-const DEMO_STATUS = {
-  ...OFFLINE_STATUS,
-  robot_online: true,
-  network_online: true,
-  sdk_connected: true,
-  gateway_connected: true,
-  camera_connected: true,
-  lio_connected: true,
-  posture: "standing",
-  point_count: DEMO_POINTS.length / 3,
-  current_location: { x: 0, y: 0, z: 0, yaw_deg: 0 },
-  current_pose: { x: 0, y: 0, z: 0.12, qx: 0, qy: 0, qz: 0, qw: 1 },
-  safety_mode: "interactive_demo",
-  safety_ready: true,
-  remote_source_confirmed: true,
-  remote_source_operational: true,
-};
-
 const STATUS_REFRESH_INTERVAL_MS = 1_000;
+const STATUS_RETRY_INTERVAL_MS = 4_000;
+const STATUS_FAILURES_BEFORE_BACKOFF = 3;
 const MAP_REFRESH_INTERVAL_MS = 850;
+const MAP_FAILURES_BEFORE_CLEAR = 4;
 const MOTION_HEARTBEAT_MS = 80;
+const SESSION_EXPIRED_MESSAGE = "Sessão expirada. Entre novamente para continuar.";
+const STOP_FAILURE_MESSAGE =
+  "Falha ao enviar o comando de parada. Se o robô continuar em movimento, use a Parada de emergência.";
 
 const MOVEMENT_LABELS = {
   gamepad: "CONTROLE USB",
@@ -157,16 +134,14 @@ function ControlModeSelector({
   );
 }
 
-function DashboardPage({ demoMode = false }) {
+function DashboardPage() {
   const { session, user } = useAuth();
+  const { notifyError, notifySuccess } = useToast();
   const accessToken = session?.access_token;
   const canManageObstacleAvoidance = user?.role === "admin";
   const [polledRobotStatus, setRobotStatus] = useState(OFFLINE_STATUS);
-  const [demoRobotStatus, setDemoRobotStatus] = useState(DEMO_STATUS);
-  const [points, setPoints] = useState(() => demoMode ? DEMO_POINTS : []);
-  const [statusMessage, setStatusMessage] = useState(
-    demoMode ? "Demonstração interativa: nenhum comando será enviado ao robô." : "",
-  );
+  const [points, setPoints] = useState([]);
+  const [statusMessage, setStatusMessage] = useState("");
   const [activeCommand, setActiveCommand] = useState(null);
   const [pendingAction, setPendingAction] = useState("");
   const [requestedSpeed, setRequestedSpeed] = useState(null);
@@ -174,12 +149,12 @@ function DashboardPage({ demoMode = false }) {
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [showOrientationHint, setShowOrientationHint] = useState(true);
   const [controlMode, setControlMode] = useState("manual");
-  const liveKit = useLiveKitRobot(demoMode ? null : accessToken);
+  const [backendUnreachable, setBackendUnreachable] = useState(false);
+  const liveKit = useLiveKitRobot(accessToken);
   const liveKitRoom = liveKit.room;
   const userId = session?.user?.id;
-  const robotStatus = demoMode
-    ? demoRobotStatus
-    : isLiveKitEnabled && liveKit.telemetry
+  const robotStatus =
+    isLiveKitEnabled && liveKit.telemetry
       ? { ...OFFLINE_STATUS, ...liveKit.telemetry }
       : polledRobotStatus;
   const motionTimerRef = useRef(null);
@@ -203,6 +178,18 @@ function DashboardPage({ demoMode = false }) {
       !robotStatus.safety_blocked,
   );
 
+  const reportError = useCallback(
+    (error, fallbackMessage = "Ocorreu um erro inesperado.") => {
+      const message =
+        error?.status === 401
+          ? SESSION_EXPIRED_MESSAGE
+          : error?.message || fallbackMessage;
+      setStatusMessage(message);
+      notifyError(message);
+    },
+    [notifyError],
+  );
+
   useEffect(() => {
     canMoveRef.current = canMove;
   }, [canMove]);
@@ -213,65 +200,97 @@ function DashboardPage({ demoMode = false }) {
 
   const dispatchRobotCommand = useCallback(
     (command, payload = {}) => {
-      if (demoMode) {
-        return Promise.resolve({
-          command,
-          payload,
-          status: "simulated",
-          result: { point_count: points.length / 3 },
-        });
-      }
       if (isLiveKitEnabled) {
         return publishLiveKitCommand(liveKitRoom, userId, command, payload);
       }
       return sendRobotCommand(accessToken, command, payload);
     },
-    [accessToken, demoMode, liveKitRoom, points.length, userId],
+    [accessToken, liveKitRoom, userId],
   );
   useEffect(() => {
-    if (demoMode || !accessToken || isLiveKitEnabled) return undefined;
+    if (!accessToken || isLiveKitEnabled) return undefined;
     let active = true;
+    let timerId = null;
+    let consecutiveFailures = 0;
 
+    // Cadeia de setTimeout: a próxima consulta só sai depois da anterior
+    // terminar, evitando requisições acumuladas quando o backend está lento.
     async function loadStatus() {
       try {
         const nextStatus = await getRobotStatus(accessToken);
-        if (active) setRobotStatus({ ...OFFLINE_STATUS, ...nextStatus });
+        if (!active) return;
+        setRobotStatus({ ...OFFLINE_STATUS, ...nextStatus });
+        if (consecutiveFailures > 0) {
+          notifySuccess("Conexão com o backend restabelecida.");
+        }
+        consecutiveFailures = 0;
+        setBackendUnreachable(false);
       } catch (error) {
+        if (!active) return;
+        consecutiveFailures += 1;
+        setRobotStatus(OFFLINE_STATUS);
+        setBackendUnreachable(true);
+        // Avisa uma vez na queda; o banner cobre o restante do período.
+        if (consecutiveFailures === 1) {
+          notifyError(
+            error?.status === 401 ? SESSION_EXPIRED_MESSAGE : error.message,
+          );
+        }
+      } finally {
         if (active) {
-          setRobotStatus(OFFLINE_STATUS);
-          setStatusMessage(error.message);
+          const delay =
+            consecutiveFailures >= STATUS_FAILURES_BEFORE_BACKOFF
+              ? STATUS_RETRY_INTERVAL_MS
+              : STATUS_REFRESH_INTERVAL_MS;
+          timerId = window.setTimeout(loadStatus, delay);
         }
       }
     }
 
     loadStatus();
-    const intervalId = window.setInterval(loadStatus, STATUS_REFRESH_INTERVAL_MS);
     return () => {
       active = false;
-      window.clearInterval(intervalId);
+      window.clearTimeout(timerId);
     };
-  }, [accessToken, demoMode]);
+  }, [accessToken, notifyError, notifySuccess]);
 
   useEffect(() => {
-    if (demoMode || !accessToken || isLiveKitEnabled) return undefined;
+    if (!accessToken || isLiveKitEnabled) return undefined;
     let active = true;
+    let timerId = null;
+    let consecutiveFailures = 0;
 
     async function loadMap() {
       try {
         const payload = await getRobotMap(accessToken);
-        if (active) setPoints(payload.points || []);
+        if (!active) return;
+        consecutiveFailures = 0;
+        setPoints(payload.points || []);
       } catch {
-        if (active) setPoints([]);
+        if (!active) return;
+        // Falha isolada não apaga o mapa; só limpa em queda prolongada.
+        consecutiveFailures += 1;
+        if (consecutiveFailures >= MAP_FAILURES_BEFORE_CLEAR) setPoints([]);
+      } finally {
+        if (active) timerId = window.setTimeout(loadMap, MAP_REFRESH_INTERVAL_MS);
       }
     }
 
     loadMap();
-    const intervalId = window.setInterval(loadMap, MAP_REFRESH_INTERVAL_MS);
     return () => {
       active = false;
-      window.clearInterval(intervalId);
+      window.clearTimeout(timerId);
     };
-  }, [accessToken, demoMode]);
+  }, [accessToken]);
+
+  useEffect(() => {
+    if (!isLiveKitEnabled) return;
+    if (liveKit.connectionState === "error" && liveKit.errorMessage) {
+      notifyError(liveKit.errorMessage);
+    } else if (liveKit.connectionState === "disconnected") {
+      notifyError("Conexão em tempo real perdida. Tentando reconectar...");
+    }
+  }, [liveKit.connectionState, liveKit.errorMessage, notifyError]);
 
   const stopMotion = useCallback(
     (sendStop = true) => {
@@ -282,20 +301,23 @@ function DashboardPage({ demoMode = false }) {
       motionTimerRef.current = null;
       activeCommandRef.current = null;
       setActiveCommand(null);
-      if (sendStop && (accessToken || demoMode)) {
-        dispatchRobotCommand("stop").catch((error) => {
-          setStatusMessage(error.message);
+      if (sendStop && accessToken) {
+        dispatchRobotCommand("stop").catch(() => {
+          // Perder o "stop" é grave: o watchdog do gateway ainda para o robô,
+          // mas o operador precisa saber imediatamente.
+          setStatusMessage(STOP_FAILURE_MESSAGE);
+          notifyError(STOP_FAILURE_MESSAGE, { duration: 10_000 });
         });
       }
     },
-    [accessToken, demoMode, dispatchRobotCommand],
+    [accessToken, dispatchRobotCommand, notifyError],
   );
 
   const beginMotion = useCallback(
     (command) => {
       if (
         controlModeRef.current !== "manual" ||
-        (!accessToken && !demoMode) ||
+        !accessToken ||
         !canMoveRef.current
       ) return;
       stopMotion(false);
@@ -315,21 +337,21 @@ function DashboardPage({ demoMode = false }) {
         } catch (error) {
           if (motionSessionRef.current === motionSession) {
             stopMotion();
-            setStatusMessage(error.message);
+            reportError(error, "Falha ao enviar o comando de movimento.");
           }
         }
       }
 
       pulse();
     },
-    [accessToken, demoMode, dispatchRobotCommand, stopMotion],
+    [accessToken, dispatchRobotCommand, reportError, stopMotion],
   );
 
   const beginAnalogMotion = useCallback(
     (vector) => {
       if (
         controlModeRef.current !== "gamepad" ||
-        (!accessToken && !demoMode) ||
+        !accessToken ||
         !canMoveRef.current
       ) return;
       if (activeCommandRef.current === "gamepad") {
@@ -360,14 +382,14 @@ function DashboardPage({ demoMode = false }) {
         } catch (error) {
           if (motionSessionRef.current === motionSession) {
             stopMotion();
-            setStatusMessage(error.message);
+            reportError(error, "Falha ao enviar o comando analógico.");
           }
         }
       }
 
       pulse();
     },
-    [accessToken, demoMode, dispatchRobotCommand, stopMotion],
+    [accessToken, dispatchRobotCommand, reportError, stopMotion],
   );
 
   useEffect(() => {
@@ -493,53 +515,25 @@ function DashboardPage({ demoMode = false }) {
   async function handleAction(command, payload, successMessage) {
     if (command === "set_obstacle_avoidance" && !canManageObstacleAvoidance) {
       setStatusMessage(OBSTACLE_AVOIDANCE_ADMIN_ONLY_MESSAGE);
+      notifyError(OBSTACLE_AVOIDANCE_ADMIN_ONLY_MESSAGE);
       return false;
     }
-    if ((!accessToken && !demoMode) || pendingActionRef.current) return false;
+    if (!accessToken || pendingActionRef.current) return false;
     pendingActionRef.current = command;
     stopMotion(false);
     setPendingAction(command);
     setStatusMessage("");
     try {
       const result = await dispatchRobotCommand(command, payload);
-      if (demoMode) {
-        setDemoRobotStatus((current) => {
-          if (command === "arm") return { ...current, control_armed: true };
-          if (command === "disarm") return { ...current, control_armed: false };
-          if (command === "stand_up" || command === "recovery_stand") {
-            return { ...current, posture: "standing" };
-          }
-          if (command === "stand_down") return { ...current, posture: "lying" };
-          if (command === "set_speed") {
-            return {
-              ...current,
-              speed_limit_percent: payload.percent,
-              linear_speed_mps: forwardSpeedMps(payload.percent),
-            };
-          }
-          if (command === "set_obstacle_avoidance") {
-            return {
-              ...current,
-              obstacle_avoidance_enabled: payload.enabled,
-              obstacle_avoidance_requested: payload.enabled,
-              obstacle_avoidance_state_confirmed: true,
-              native_avoidance_confirmed: payload.enabled,
-            };
-          }
-          return current;
-        });
-        if (command === "reset_map") {
-          setPoints([]);
-          setDemoRobotStatus((current) => ({ ...current, point_count: 0 }));
-        }
-      }
-      setStatusMessage(demoMode ? `Demonstração · ${successMessage}` : successMessage);
+      let finalMessage = successMessage;
       if (command === "save_map" && result?.result?.point_count) {
-        setStatusMessage(`Mapa salvo com ${result.result.point_count.toLocaleString("pt-BR")} pontos.`);
+        finalMessage = `Mapa salvo com ${result.result.point_count.toLocaleString("pt-BR")} pontos.`;
       }
+      setStatusMessage(finalMessage);
+      notifySuccess(finalMessage);
       return true;
     } catch (error) {
-      setStatusMessage(error.message);
+      reportError(error, "Não foi possível concluir a operação.");
       return false;
     } finally {
       pendingActionRef.current = "";
@@ -564,18 +558,16 @@ function DashboardPage({ demoMode = false }) {
   }
 
   async function handleOracleAnalysis() {
-    if (!accessToken && !demoMode) return;
+    if (!accessToken) return;
     setIsRequestingAnalysis(true);
     setStatusMessage("");
     try {
-      if (!demoMode) await requestOracleAnalysis(accessToken);
-      setStatusMessage(
-        demoMode
-          ? "Demonstração · captura simulada para análise da Oracle."
-          : "Captura adicionada à fila de análise da Oracle.",
-      );
+      await requestOracleAnalysis(accessToken);
+      const message = "Captura adicionada à fila de análise da Oracle.";
+      setStatusMessage(message);
+      notifySuccess(message);
     } catch (error) {
-      setStatusMessage(error.message);
+      reportError(error, "Não foi possível solicitar a análise da Oracle.");
     } finally {
       setIsRequestingAnalysis(false);
     }
@@ -586,9 +578,17 @@ function DashboardPage({ demoMode = false }) {
     handleAction(
       "damping",
       {},
-      "Damping oficial da Unitree enviado; o controle permanece disponível.",
+      "Parada de emergência acionada; o robô amorteceu e o controle continua disponível.",
     );
   }
+
+  const connectionIssue = isLiveKitEnabled
+      ? liveKit.connectionState === "error" || liveKit.connectionState === "disconnected"
+        ? "Conexão em tempo real indisponível · tentando reconectar..."
+        : ""
+      : backendUnreachable
+        ? "Sem resposta do backend · tentando reconectar..."
+        : "";
 
   const location = robotStatus.current_location;
   const telemetrySpeed = robotStatus.speed_limit_percent;
@@ -633,13 +633,13 @@ function DashboardPage({ demoMode = false }) {
     : !avoidanceRequested
       ? "Modo livre selecionado · sem proteção confirmada"
       : avoidanceConfirmed
-        ? "API confirmada"
-        : "Comando enviado · firmware sem confirmação";
+        ? "Proteção confirmada"
+        : "Comando enviado · aguardando confirmação";
   const safetyTitle = !avoidanceRequested
-    ? "Obstacle Avoidance desativado"
+    ? "Anticolisão desativada"
     : avoidanceConfirmed
-      ? "Proteção Unitree"
-      : "Obstacle Avoidance solicitado";
+      ? "Anticolisão confirmado"
+      : "Anticolisão solicitada";
   const controlLabel = robotStatus.safety_blocked
     ? "LIMITE DE SEGURANÇA"
     : robotStatus.control_armed
@@ -653,7 +653,7 @@ function DashboardPage({ demoMode = false }) {
     onMotion: beginAnalogMotion,
     onStop: stopMotion,
     onAction(action) {
-      if ((!accessToken && !demoMode) || pendingAction) return;
+      if (!accessToken || pendingAction) return;
       if (action === "arm" && !robotStatus.control_armed) {
         handleAction("arm", {}, "Controle habilitado pelo gamepad.");
       } else if (action === "damping") {
@@ -728,14 +728,14 @@ function DashboardPage({ demoMode = false }) {
   const gamepadTitle = !controllerSupported
     ? "Navegador sem suporte a controles USB"
     : !gamepad.secureContext
-      ? "Controle USB exige acesso local seguro"
+      ? "Controle USB exige conexão segura"
       : controllerConnected
         ? `${controllerName} conectado`
         : "Nenhum controle USB detectado";
   const gamepadDescription = !controllerSupported
-    ? "Use Chrome ou Edge atual; Firefox aceita apenas controles reconhecidos como gamepad."
+    ? "Use um navegador atualizado; alguns controles podem não ser reconhecidos."
     : !gamepad.secureContext
-      ? "Abra o painel por http://localhost:5173 usando o túnel SSH."
+      ? "Abra o painel pelo endereço oficial (https) para usar o controle."
       : controllerConnected
         ? controlMode === "gamepad"
           ? controller.waitingForNeutral
@@ -745,7 +745,7 @@ function DashboardPage({ demoMode = false }) {
               : controller.motionDetected
               ? "Entrada analógica reconhecida pelo navegador"
               : hidGamepad.connected && !gamepad.connected
-                ? "HID genérico autorizado · mova um manche para testar"
+                ? "Controle autorizado · mova um manche para testar"
                 : "Modo USB ativo · mova um manche para testar"
           : "Conectado · Botões foi selecionado manualmente"
         : hidGamepad.error
@@ -791,10 +791,15 @@ function DashboardPage({ demoMode = false }) {
 
   return (
     <div className="app-layout">
-      <AppHeader showLogout={!demoMode} demoMode={demoMode} />
+      <AppHeader showLogout />
       <SlamBackground className="dashboard-slam-background" />
 
       <main className="dashboard-page">
+        {connectionIssue && (
+          <p className="connection-banner" role="alert">
+            {connectionIssue}
+          </p>
+        )}
         {showOrientationHint && (
           <aside className="orientation-hint" aria-label="Sugestão de orientação">
             <span aria-hidden="true">↻</span>
@@ -812,12 +817,12 @@ function DashboardPage({ demoMode = false }) {
         <section className="dashboard-grid">
           <div className="operation-hud">
             <div className="operation-statuses" aria-label="Status da operação">
-              <span><i /> {demoMode ? "DEMONSTRAÇÃO · LIDAR 3D" : "DADOS REAIS · LIDAR 3D"}</span>
+              <span><i /> OPERAÇÃO AO VIVO</span>
               <span>ROBÔ · <strong className={robotStatus.robot_online ? "is-online" : "is-offline"}>{robotStatus.robot_online ? "ONLINE" : "OFFLINE"}</strong></span>
-              <span>LIO + IMU · <strong className={robotStatus.lio_connected ? "is-online" : "is-offline"}>{robotStatus.lio_connected ? "ESTÁVEL" : "AGUARDANDO"}</strong></span>
+              <span>SENSORES · <strong className={robotStatus.lio_connected ? "is-online" : "is-offline"}>{robotStatus.lio_connected ? "ESTÁVEL" : "AGUARDANDO"}</strong></span>
               <span>CÂMERA · <strong className={robotStatus.camera_connected ? "is-online" : "is-offline"}>{robotStatus.camera_connected ? "AO VIVO" : "SEM SINAL"}</strong></span>
               <span>MAPA · <strong>{Number(robotStatus.point_count || 0).toLocaleString("pt-BR")} PTS</strong></span>
-              <OnlineUsersPresence enabled={!demoMode} />
+              <OnlineUsersPresence enabled />
               <ControlModeSelector
                 mode={controlMode}
                 gamepadConnected={controllerConnected}
@@ -829,33 +834,25 @@ function DashboardPage({ demoMode = false }) {
           </div>
           <article className="panel video-panel" aria-label="Câmera frontal">
             <div className="video-placeholder video-placeholder--live">
-              {demoMode ? (
-                <div className="demo-empty-feed" aria-label="Câmera simulada">
-                  <span>DEMONSTRAÇÃO INTERATIVA</span>
-                  <strong>Câmera do GO2</strong>
-                  <small>Entre como operador para visualizar a transmissão ao vivo.</small>
-                </div>
-              ) : (
-                <RobotCamera
-                  accessToken={accessToken}
-                  connected={robotStatus.camera_connected}
-                  liveKitRoom={liveKit.room}
-                  liveKitConnectionState={liveKit.connectionState}
-                  liveKitErrorMessage={liveKit.errorMessage}
-                />
-              )}
+              <RobotCamera
+                accessToken={accessToken}
+                connected={robotStatus.camera_connected}
+                liveKitRoom={liveKit.room}
+                liveKitConnectionState={liveKit.connectionState}
+                liveKitErrorMessage={liveKit.errorMessage}
+              />
               <div className="viewport-controls viewport-controls--camera">
                 <OracleButton
                   onClick={handleOracleAnalysis}
                   isLoading={isRequestingAnalysis}
-                  disabled={!demoMode && !robotStatus.camera_connected}
+                  disabled={!robotStatus.camera_connected}
                 />
                 <button
                   className="viewport-action viewport-action--map-toggle"
                   type="button"
                   onClick={() => setIsMapOpen(true)}
                 >
-                  MAPA LIDAR
+                  MAPA 3D
                 </button>
               </div>
             </div>
@@ -979,9 +976,9 @@ function DashboardPage({ demoMode = false }) {
                     className="ui-button ui-button--danger mobile-emergency"
                     type="button"
                     onClick={handleDamping}
-                    disabled={(!accessToken && !demoMode) || pendingAction === "damping"}
+                    disabled={!accessToken || pendingAction === "damping"}
                   >
-                    <span aria-hidden="true">■</span> Damping
+                    <span aria-hidden="true">■</span> Parada de emergência
                   </button>
                 </div>
             </div>
@@ -991,7 +988,7 @@ function DashboardPage({ demoMode = false }) {
           <div className="panel-header teleoperation-heading">
             <div>
               <h2>Central de comandos</h2>
-              <p>Movimento contínuo, postura e resposta em tempo real.</p>
+              <p>Comando e resposta do robô em tempo real.</p>
             </div>
             <span className={`status-label ${robotStatus.control_armed ? "is-armed" : ""}`}>
               {controlLabel}
@@ -1029,7 +1026,7 @@ function DashboardPage({ demoMode = false }) {
                       : avoidanceConfirmed
                         ? "Controle habilitado com anticolisão confirmado."
                         : avoidanceRequested
-                          ? "Controle habilitado; proteção solicitada sem confirmação nativa."
+                          ? "Controle habilitado; proteção solicitada, sem confirmação do robô."
                           : "Controle habilitado em modo livre.",
                   )
                 }
@@ -1039,7 +1036,7 @@ function DashboardPage({ demoMode = false }) {
                   {robotStatus.control_armed
                     ? robotStatus.safety_ready
                       ? "Canal ativo · toque para bloquear"
-                      : "Aguardando confirmação da Unitree"
+                      : "Aguardando confirmação do robô"
                     : "Toque para ativar o canal"}
                 </small>
               </button>
@@ -1050,8 +1047,8 @@ function DashboardPage({ demoMode = false }) {
                 aria-pressed={avoidanceRequested}
                 aria-label={
                   canManageObstacleAvoidance
-                    ? `${avoidanceRequested ? "Desativar" : "Ativar"} Obstacle Avoidance`
-                    : `${avoidanceRequested ? "Obstacle Avoidance ativo" : "Obstacle Avoidance inativo"}. Alteração restrita a administradores.`
+                    ? `${avoidanceRequested ? "Desativar" : "Ativar"} anticolisão`
+                    : `${avoidanceRequested ? "Anticolisão ativa" : "Anticolisão inativa"}. Alteração restrita a administradores.`
                 }
                 title={
                   canManageObstacleAvoidance
@@ -1075,22 +1072,22 @@ function DashboardPage({ demoMode = false }) {
               >
                 <strong>
                   {!canManageObstacleAvoidance
-                    ? `Obstacle Avoidance ${avoidanceRequested ? "ativo" : "inativo"}`
+                    ? `Anticolisão ${avoidanceRequested ? "ativa" : "inativa"}`
                     : avoidanceChanging
-                    ? "Confirmando Obstacle Avoidance..."
+                    ? "Confirmando anticolisão..."
                     : avoidanceRequested
-                      ? "Desativar Obstacle Avoidance"
-                      : "Ativar Obstacle Avoidance"}
+                      ? "Desativar anticolisão"
+                      : "Ativar anticolisão"}
                 </strong>
                 <small>
                   {!canManageObstacleAvoidance
                     ? "Somente administradores podem alterar esta função"
                     : avoidanceRequested
                     ? avoidanceConfirmed
-                      ? "Proteção nativa confirmada e ativa"
-                      : "Solicitado · confirmação nativa indisponível"
+                      ? "Proteção confirmada e ativa"
+                      : "Solicitado · sem confirmação do robô"
                     : avoidanceStateConfirmed
-                      ? "Estado nativo confirmado como desativado"
+                      ? "Proteção confirmada como desativada"
                       : "Modo livre solicitado · sem proteção confirmada"}
                 </small>
               </button>
@@ -1142,7 +1139,7 @@ function DashboardPage({ demoMode = false }) {
                     {controlMode === "gamepad"
                       ? "ATIVO"
                       : hidGamepad.connected && !gamepad.connected
-                        ? "HID"
+                        ? "USB"
                         : gamepad.standardMapping ? "PRONTO" : "COMPATÍVEL"}
                   </b>
                 )}
@@ -1198,35 +1195,30 @@ function DashboardPage({ demoMode = false }) {
                       : canMove ? "BOTÕES PRONTOS" : "BLOQUEADO"}
                 </small>
               </div>
-            </section>
 
-            <section className="teleoperation-card teleoperation-card--response">
-              <div className="teleoperation-card__header">
-                <div>
+              <div className="teleoperation-speed-row" aria-label={`Velocidade ${speed}%`}>
+                <div className="teleoperation-speed-row__label">
                   <strong>Velocidade</strong>
-                  <small>Intensidade do comando nativo</small>
+                  <small>{selectedForwardSpeed.toFixed(2)} m/s frontal</small>
+                </div>
+                <div className="teleoperation-speed">
+                  <button
+                    className="teleoperation-speed__button"
+                    type="button"
+                    aria-label="Diminuir velocidade"
+                    disabled={!robotStatus.sdk_connected || speed <= speedMin || Boolean(pendingAction)}
+                    onClick={() => handleSpeedChange(lowerSpeed)}
+                  >−</button>
+                  <strong>{speed}%</strong>
+                  <button
+                    className="teleoperation-speed__button"
+                    type="button"
+                    aria-label="Aumentar velocidade"
+                    disabled={!robotStatus.sdk_connected || speed >= speedMax || Boolean(pendingAction)}
+                    onClick={() => handleSpeedChange(higherSpeed)}
+                  >+</button>
                 </div>
               </div>
-              <div className="teleoperation-speed">
-                <button
-                  className="teleoperation-speed__button"
-                  type="button"
-                  aria-label="Diminuir velocidade"
-                  disabled={!robotStatus.sdk_connected || speed <= speedMin || Boolean(pendingAction)}
-                  onClick={() => handleSpeedChange(lowerSpeed)}
-                >−</button>
-                <strong>{speed}%</strong>
-                <button
-                  className="teleoperation-speed__button"
-                  type="button"
-                  aria-label="Aumentar velocidade"
-                  disabled={!robotStatus.sdk_connected || speed >= speedMax || Boolean(pendingAction)}
-                  onClick={() => handleSpeedChange(higherSpeed)}
-                >+</button>
-              </div>
-              <small>
-                Nível operacional · {speedMin}%–{speedMax}% · comando frontal exato: {selectedForwardSpeed.toFixed(2)} m/s
-              </small>
             </section>
           </div>
 
@@ -1235,9 +1227,9 @@ function DashboardPage({ demoMode = false }) {
               className="ui-button ui-button--danger teleoperation-emergency"
               type="button"
               onClick={handleDamping}
-              disabled={(!accessToken && !demoMode) || pendingAction === "damping"}
+              disabled={!accessToken || pendingAction === "damping"}
             >
-              <span aria-hidden="true">■</span> Damping
+              <span aria-hidden="true">■</span> Parada de emergência
             </button>
           </div>
           {statusMessage && <p className="operation-message" role="status">{statusMessage}</p>}
@@ -1272,7 +1264,7 @@ function DashboardPage({ demoMode = false }) {
               </div>
               <div className="map-placeholder map-placeholder--live">
                 <PointCloudMap
-                  points={demoMode ? points : isLiveKitEnabled ? liveKit.points : points}
+                  points={isLiveKitEnabled ? liveKit.points : points}
                   pose={robotStatus.current_pose}
                 />
               </div>

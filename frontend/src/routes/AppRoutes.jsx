@@ -8,7 +8,7 @@ import LoginPage from "../pages/LoginPage";
 function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
       <Route path="/login" element={<LoginPage />} />
 
@@ -20,8 +20,6 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-
-      <Route path="/demo" element={<DashboardPage demoMode />} />
 
       <Route
         path="/admin/usuarios"

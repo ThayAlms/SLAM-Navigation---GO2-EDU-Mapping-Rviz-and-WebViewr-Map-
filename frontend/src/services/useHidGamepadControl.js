@@ -32,12 +32,12 @@ function initialState() {
 function errorMessage(error) {
   if (error?.name === "NotFoundError") return "Nenhum dispositivo foi selecionado.";
   if (error?.name === "NotAllowedError" || error?.name === "SecurityError") {
-    return "O navegador não autorizou o acesso ao controle HID.";
+    return "O navegador não autorizou o acesso ao controle.";
   }
   if (error?.name === "NetworkError") {
-    return "O Ubuntu ou o navegador bloqueou a abertura deste controle HID.";
+    return "O sistema bloqueou o acesso a este controle.";
   }
-  return error?.message || "Não foi possível abrir o controle HID.";
+  return error?.message || "Não foi possível abrir o controle.";
 }
 
 export function useHidGamepadControl({ enabled, canMove, onMotion, onStop }) {

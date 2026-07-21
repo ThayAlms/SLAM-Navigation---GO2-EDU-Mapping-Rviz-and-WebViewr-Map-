@@ -47,8 +47,10 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+# Nuvem de pontos desativada por padrão: o uplink 4G fica dedicado ao vídeo
+# e aos comandos. Reative com LIVEKIT_MAX_POINTS=1500 (ou outro valor 1-1500).
 python3 "$ROOT/livekit_data_publisher.py" \
-  --max-points "${LIVEKIT_MAX_POINTS:-1500}" &
+  --max-points "${LIVEKIT_MAX_POINTS:-0}" &
 data_pid=$!
 python3 "$ROOT/livekit_command_receiver.py" &
 command_pid=$!

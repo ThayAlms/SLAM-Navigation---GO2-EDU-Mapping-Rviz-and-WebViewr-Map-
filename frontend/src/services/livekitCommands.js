@@ -15,7 +15,7 @@ function requestId() {
 
 export async function publishLiveKitCommand(room, userId, command, payload = {}) {
   if (!room || room.state !== "connected") {
-    throw new Error("Canal de controle indisponível. Aguarde a conexão com o LiveKit.");
+    throw new Error("Canal de controle indisponível. Aguarde a reconexão com o robô.");
   }
   if (!userId) {
     throw new Error("Sessão do operador inválida.");

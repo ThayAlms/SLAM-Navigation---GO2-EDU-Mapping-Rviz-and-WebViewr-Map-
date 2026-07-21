@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { RoomEvent, Track } from "livekit-client";
 
 const CONNECTION_LABELS = {
-  connected: "Conectado ao LiveKit",
-  disconnected: "LiveKit desconectado",
-  error: "LiveKit indisponível",
+  connected: "Conexão estabelecida",
+  disconnected: "Transmissão desconectada · reconectando",
+  error: "Transmissão indisponível",
 };
 
 function LiveKitRobotCamera({ room, connectionState, errorMessage }) {
@@ -138,13 +138,13 @@ function LiveKitRobotCamera({ room, connectionState, errorMessage }) {
           <strong>
             {mediaError ||
               CONNECTION_LABELS[connectionState] ||
-              "Conectando ao LiveKit"}
+              "Conectando à câmera"}
           </strong>
           <small>
             {mediaError
               ? "A reprodução será retomada automaticamente."
               : errorMessage ||
-              "Aguardando a Jetson publicar a câmera na sala go2-primary."}
+              "Aguardando o robô transmitir a câmera."}
           </small>
         </div>
       )}

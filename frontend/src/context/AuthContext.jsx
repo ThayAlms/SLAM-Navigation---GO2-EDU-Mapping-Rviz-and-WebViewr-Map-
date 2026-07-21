@@ -120,7 +120,7 @@ export function AuthProvider({ children }) {
   const signIn = useCallback(async (email, password) => {
     if (!supabase) {
       throw new Error(
-        "Supabase não configurado. Preencha as variáveis VITE_SUPABASE_*.",
+        "Acesso indisponível neste ambiente. Contate o administrador.",
       );
     }
 

@@ -83,9 +83,18 @@ export function useLiveKitRobot(accessToken) {
       }
     }
 
+    let retryTimerId = null;
+    let retryDelayMs = 3_000;
+
     nextRoom.on(RoomEvent.DataReceived, handleData);
     nextRoom.on(RoomEvent.Disconnected, () => {
-      if (active) setConnectionState("disconnected");
+      if (!active) return;
+      setConnectionState("disconnected");
+      // O cliente desistiu das reconexões transparentes; recomeça do zero
+      // com credenciais novas em vez de deixar o painel morto.
+      window.clearTimeout(retryTimerId);
+      retryTimerId = window.setTimeout(connect, retryDelayMs);
+      retryDelayMs = Math.min(retryDelayMs * 2, 30_000);
     });
     nextRoom.on(RoomEvent.Reconnecting, () => {
       if (active) setConnectionState("connecting");
@@ -106,18 +115,22 @@ export function useLiveKitRobot(accessToken) {
         if (active) {
           setRoom(nextRoom);
           setConnectionState("connected");
+          retryDelayMs = 3_000;
         }
       } catch (error) {
-        if (active) {
-          setErrorMessage(error.message);
-          setConnectionState("error");
-        }
+        if (!active) return;
+        setErrorMessage(error.message);
+        setConnectionState("error");
+        // Nova tentativa automática com espera progressiva (máximo 30 s).
+        retryTimerId = window.setTimeout(connect, retryDelayMs);
+        retryDelayMs = Math.min(retryDelayMs * 2, 30_000);
       }
     }
 
     connect();
     return () => {
       active = false;
+      window.clearTimeout(retryTimerId);
       latestTelemetryAtRef.current = 0;
       previousMapPointCountRef.current = 0;
       pointCloudVoxels.clear();

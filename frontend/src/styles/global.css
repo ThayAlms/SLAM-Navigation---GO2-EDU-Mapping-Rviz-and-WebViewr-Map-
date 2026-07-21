@@ -1791,7 +1791,7 @@ p {
 
 /* Alinhamento uniforme dos três módulos da central de comandos. */
 .teleoperation-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .teleoperation-card__header {
@@ -2866,7 +2866,7 @@ button:focus-visible {
 
 .teleoperation-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: stretch;
   width: min(100%, 900px);
   margin: 0 auto;

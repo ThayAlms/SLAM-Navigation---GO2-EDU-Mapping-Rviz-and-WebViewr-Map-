@@ -144,11 +144,12 @@ def send_cli_data(room, topic, payload, timeout):
 
 
 def publish_with_cli(room, points, status, timeout):
-    point_payload = {
-        "encoding": "go2p-base64",
-        "data": base64.b64encode(encode_point_cloud(points)).decode("ascii"),
-    }
-    send_cli_data(room, "go2.pointcloud", point_payload, timeout)
+    if points:
+        point_payload = {
+            "encoding": "go2p-base64",
+            "data": base64.b64encode(encode_point_cloud(points)).decode("ascii"),
+        }
+        send_cli_data(room, "go2.pointcloud", point_payload, timeout)
     send_cli_data(room, "go2.telemetry", status, timeout)
     return {"point_count": len(points) // 3, "room_name": room}
 
@@ -204,8 +205,8 @@ def main():
         parser.error("informe VERCEL_APP_URL ou --vercel-url")
     if args.transport == "vercel" and not args.publisher_key:
         parser.error("informe ROBOT_PUBLISHER_KEY ou --publisher-key")
-    if not 1 <= args.max_points <= 1500:
-        parser.error("--max-points deve estar entre 1 e 1500")
+    if not 0 <= args.max_points <= 1500:
+        parser.error("--max-points deve estar entre 0 (nuvem desativada) e 1500")
 
     gateway_url = args.gateway_url.rstrip("/")
     publish_url = (
@@ -238,12 +239,18 @@ def main():
                     gateway_url + "/api/status", args.gateway_key, args.timeout
                 )
             )
-            point_payload = get_json(
-                gateway_url + "/api/map/points", args.gateway_key, args.timeout
-            )
-            points = sample_points(point_payload.get("points", []), args.max_points)
-            if not points:
-                raise RuntimeError("gateway ainda não possui pontos do LiDAR")
+            # Com --max-points 0 a nuvem fica de fora do canal (economiza o
+            # uplink 4G para o vídeo); a telemetria continua normalmente.
+            points = []
+            if args.max_points > 0:
+                point_payload = get_json(
+                    gateway_url + "/api/map/points", args.gateway_key, args.timeout
+                )
+                points = sample_points(
+                    point_payload.get("points", []), args.max_points
+                )
+                if not points:
+                    raise RuntimeError("gateway ainda não possui pontos do LiDAR")
             if args.transport == "cli":
                 result = publish_with_cli(
                     args.room, points, status, args.timeout

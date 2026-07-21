@@ -5,6 +5,8 @@ import { isLiveKitEnabled } from "../services/livekit";
 import LiveKitRobotCamera from "./LiveKitRobotCamera";
 
 const FRAME_INTERVAL_MS = 220;
+const FRAME_RETRY_INTERVAL_MS = 1_500;
+const FRAME_FAILURES_BEFORE_BACKOFF = 5;
 
 function RobotCamera({
   accessToken,
@@ -38,6 +40,7 @@ function PollingRobotCamera({ accessToken, connected }) {
     let active = true;
     let timerId = null;
     let currentUrl = "";
+    let consecutiveFailures = 0;
 
     async function loadFrame() {
       try {
@@ -46,12 +49,22 @@ function PollingRobotCamera({ accessToken, connected }) {
         const nextUrl = URL.createObjectURL(blob);
         if (currentUrl) URL.revokeObjectURL(currentUrl);
         currentUrl = nextUrl;
+        consecutiveFailures = 0;
         setFrameUrl(nextUrl);
         setFailed(false);
       } catch {
-        if (active) setFailed(true);
+        if (!active) return;
+        consecutiveFailures += 1;
+        setFailed(true);
       } finally {
-        if (active) timerId = window.setTimeout(loadFrame, FRAME_INTERVAL_MS);
+        if (active) {
+          // Com a câmera fora do ar, reduz o ritmo para poupar o backend.
+          const delay =
+            consecutiveFailures >= FRAME_FAILURES_BEFORE_BACKOFF
+              ? FRAME_RETRY_INTERVAL_MS
+              : FRAME_INTERVAL_MS;
+          timerId = window.setTimeout(loadFrame, delay);
+        }
       }
     }
 
@@ -68,7 +81,7 @@ function PollingRobotCamera({ accessToken, connected }) {
       <div className="stream-empty">
         <span className="stream-empty-icon">◉</span>
         <strong>{failed ? "Câmera temporariamente indisponível" : "Aguardando câmera"}</strong>
-        <small>O quadro aparecerá quando o gateway da Jetson responder.</small>
+        <small>A imagem aparecerá quando o robô estiver transmitindo.</small>
       </div>
     );
   }

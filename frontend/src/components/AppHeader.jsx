@@ -6,7 +6,7 @@ import oracleLogo from "../../logos/Oracle-Logo.png";
 import { useAuth } from "../context/useAuth";
 import { useTheme } from "../context/useTheme";
 
-function AppHeader({ showLogout = false, demoMode = false }) {
+function AppHeader({ showLogout = false }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { signOut, user } = useAuth();
@@ -46,7 +46,7 @@ function AppHeader({ showLogout = false, demoMode = false }) {
   }, []);
 
   function handleLogoClick() {
-    navigate(demoMode ? "/demo" : showLogout ? "/dashboard" : "/login");
+    navigate(showLogout ? "/dashboard" : "/login");
   }
 
   async function handleLogout() {
@@ -107,9 +107,6 @@ function AppHeader({ showLogout = false, demoMode = false }) {
               ) : (
                 <>
                   <button type="button" onClick={() => navigate("/login")}>Acesso do operador</button>
-                  {demoMode && (
-                    <button type="button" onClick={() => navigateFromMenu("/demo")}>Demonstração interativa</button>
-                  )}
                   <span className="header-menu-note">XD4 Robotics × Oracle</span>
                 </>
               )}
