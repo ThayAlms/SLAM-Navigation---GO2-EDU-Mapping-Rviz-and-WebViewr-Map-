@@ -13,6 +13,11 @@
 }
 
 @media (max-width: 1199px) {
+  /* Logout remains available in the hamburger menu on compact layouts. */
+  .app-header--authenticated .header-logout-button {
+    display: none;
+  }
+
   html,
   body,
   #root,

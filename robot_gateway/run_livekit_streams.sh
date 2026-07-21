@@ -9,6 +9,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CAMERA_GROUP="${GO2_CAMERA_GROUP:-230.1.1.1}"
 CAMERA_PORT="${GO2_CAMERA_PORT:-1720}"
 CAMERA_INTERFACE="${GO2_CAMERA_INTERFACE:-eth0}"
+VIDEO_BITRATE="${LIVEKIT_VIDEO_BITRATE:-1200000}"
+VIDEO_WIDTH="${LIVEKIT_VIDEO_WIDTH:-960}"
+VIDEO_HEIGHT="${LIVEKIT_VIDEO_HEIGHT:-540}"
 PUBLISH_URL="${LIVEKIT_INGRESS_URL%/}/${LIVEKIT_STREAM_KEY}"
 data_pid=""
 command_pid=""
@@ -53,6 +56,13 @@ gst-launch-1.0 -q -e \
   udpsrc address="$CAMERA_GROUP" port="$CAMERA_PORT" multicast-iface="$CAMERA_INTERFACE" \
     caps="application/x-rtp,media=video,encoding-name=H264,clock-rate=90000" \
   ! rtph264depay \
+  ! h264parse \
+  ! nvv4l2decoder \
+  ! nvvidconv \
+  ! "video/x-raw(memory:NVMM),format=NV12,width=$VIDEO_WIDTH,height=$VIDEO_HEIGHT" \
+  ! nvv4l2h264enc bitrate="$VIDEO_BITRATE" control-rate=1 \
+      iframeinterval=30 idrinterval=30 insert-sps-pps=true \
+      maxperf-enable=true num-B-Frames=0 \
   ! h264parse config-interval=-1 \
   ! "video/x-h264,stream-format=avc,alignment=au" \
   ! flvmux streamable=true \

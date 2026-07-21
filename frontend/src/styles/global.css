@@ -412,6 +412,11 @@ p {
   transform: scale(0.97);
 }
 
+.header-logout-button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
 /* Botão sair no header branco */
 
 .app-header--scrolled .header-logout-button {

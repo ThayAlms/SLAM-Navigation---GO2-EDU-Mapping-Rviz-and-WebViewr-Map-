@@ -147,7 +147,9 @@ export function AuthProvider({ children }) {
 
   const signOut = useCallback(async () => {
     if (!supabase) return;
-    const { error } = await supabase.auth.signOut();
+    // Clear this browser's session immediately. A local sign-out is enough for
+    // the operator UI and does not depend on the auth server being reachable.
+    const { error } = await supabase.auth.signOut({ scope: "local" });
     if (error) throw error;
   }, []);
 

@@ -13,6 +13,7 @@ function AppHeader({ showLogout = false, demoMode = false }) {
   const { theme, setTheme } = useTheme();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -49,10 +50,16 @@ function AppHeader({ showLogout = false, demoMode = false }) {
   }
 
   async function handleLogout() {
+    if (isSigningOut) return;
+    setIsSigningOut(true);
+    setIsMenuOpen(false);
     try {
       await signOut();
+    } catch (error) {
+      console.warn("Não foi possível encerrar a sessão normalmente.", error);
     } finally {
       navigate("/login", { replace: true });
+      setIsSigningOut(false);
     }
   }
 
@@ -93,7 +100,9 @@ function AppHeader({ showLogout = false, demoMode = false }) {
                     </button>
                   )}
                   <span className="header-menu-rule" />
-                  <button className="header-menu-exit" type="button" onClick={handleLogout}>Encerrar sessão</button>
+                  <button className="header-menu-exit" type="button" onClick={handleLogout} disabled={isSigningOut}>
+                    {isSigningOut ? "Saindo..." : "Encerrar sessão"}
+                  </button>
                 </>
               ) : (
                 <>
@@ -130,6 +139,16 @@ function AppHeader({ showLogout = false, demoMode = false }) {
         </div>
 
         {!isLogin && <div className="app-header-actions">
+          {showLogout && (
+            <button
+              type="button"
+              className="header-logout-button"
+              onClick={handleLogout}
+              disabled={isSigningOut}
+            >
+              {isSigningOut ? "Saindo..." : "Sair"}
+            </button>
+          )}
           <button
             type="button"
             className="theme-toggle"
