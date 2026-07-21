@@ -76,7 +76,7 @@ O retorno esperado é HTTP `201` com `server_url` e `participant_token`.
 
 O transporte remoto usa dois caminhos na mesma sala:
 
-- câmera RTP/H.264 do Go2 → GStreamer → LiveKit Ingress RTMP;
+- câmera RTP/H.264 do Go2 → GStreamer → LiveKit WebRTC direto;
 - mapa do gateway local → Function protegida da Vercel → pacote binário
   `go2.pointcloud` do LiveKit.
 
@@ -91,32 +91,35 @@ fallback, mas a Jetson usa por padrão a CLI `lk` já autenticada para enviar a
 nuvem diretamente à sala. Assim, a proteção do deployment da Vercel não
 interfere nos dados do LiDAR.
 
-Crie o Ingress da câmera com a CLI já autenticada:
-
-```bash
-lk ingress create robot_gateway/livekit_ingress.json
-```
-
-Guarde a URL RTMP e a Stream Key retornadas pelo LiveKit. Na Jetson, inicie
-primeiro o gateway ROS/SLAM:
+O modo padrão publica H.264 diretamente na sala com a CLI `lk`, sem RTMP e
+sem a transcodificação do Ingress. Inicie primeiro o gateway ROS/SLAM:
 
 ```bash
 ./robot_gateway/run_gateway.sh
 ```
 
-Em outro terminal, configure apenas a sessão atual e inicie os dois fluxos:
+Em outro terminal, inicie os fluxos:
 
 ```bash
+./robot_gateway/run_livekit_streams.sh
+```
+
+O Ingress RTMP permanece disponível somente como fallback:
+
+```bash
+export LIVEKIT_VIDEO_TRANSPORT=rtmp
 export LIVEKIT_INGRESS_URL='rtmps://URL-DO-INGRESS'
 export LIVEKIT_STREAM_KEY='STREAM-KEY-DO-INGRESS'
 ./robot_gateway/run_livekit_streams.sh
 ```
 
-O script usa FFmpeg para a saída RTMPS e envia 1.500 pontos por atualização com
-`lk room send-data`. O navegador acumula amostras voxelizadas até 18 mil pontos
-para tornar o ambiente legível. A nuvem usa quantização binária e Base64 para
-ficar abaixo do limite de pacote do LiveKit. Os segredos existem somente no
-ambiente da Jetson e nunca devem ser adicionados ao Git.
+No modo direto, o H.264 usa 900 kbps, intervalo de IDR de 0,5 segundo e WebRTC,
+evitando que o TCP acumule quadros antigos quando a rede móvel oscila. O script
+também envia 1.500 pontos por atualização com `lk room send-data`. O navegador
+acumula amostras voxelizadas até 18 mil pontos para tornar o ambiente legível.
+A nuvem usa quantização binária e Base64 para ficar abaixo do limite de pacote
+do LiveKit. Os segredos existem somente no ambiente da Jetson e nunca devem ser
+adicionados ao Git.
 
 O mesmo script mantém `livekit_command_receiver.py` conectado à sala. Os
 botões do painel enviam pacotes autenticados no tópico `go2.command`; o receptor

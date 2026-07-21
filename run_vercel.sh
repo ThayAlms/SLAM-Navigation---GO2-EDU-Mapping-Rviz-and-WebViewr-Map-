@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_ENV="$ROOT/backend/.env"
 ROOM_NAME="${LIVEKIT_ROOM_NAME:-go2-primary}"
 INGRESS_NAME="${GO2_LIVEKIT_INGRESS_NAME:-go2-front-camera}"
+VIDEO_TRANSPORT="${LIVEKIT_VIDEO_TRANSPORT:-direct}"
 gateway_pid=""
 streams_pid=""
 
@@ -127,7 +128,8 @@ flock -n 9 || {
   exit 1
 }
 
-if [[ -z "${LIVEKIT_INGRESS_URL:-}" || -z "${LIVEKIT_STREAM_KEY:-}" ]]; then
+if [[ "$VIDEO_TRANSPORT" == "rtmp" ]] &&
+  [[ -z "${LIVEKIT_INGRESS_URL:-}" || -z "${LIVEKIT_STREAM_KEY:-}" ]]; then
   echo "Localizando o Ingress da câmera no LiveKit..."
   ingress_credentials="$(discover_ingress)" || {
     echo "[ERRO] Ingress '$INGRESS_NAME' da sala '$ROOM_NAME' não encontrado." >&2
@@ -137,6 +139,7 @@ if [[ -z "${LIVEKIT_INGRESS_URL:-}" || -z "${LIVEKIT_STREAM_KEY:-}" ]]; then
   read -r LIVEKIT_INGRESS_URL LIVEKIT_STREAM_KEY <<<"$ingress_credentials"
 fi
 export LIVEKIT_INGRESS_URL LIVEKIT_STREAM_KEY LIVEKIT_ROOM_NAME="$ROOM_NAME"
+export LIVEKIT_VIDEO_TRANSPORT="$VIDEO_TRANSPORT"
 
 if [[ -z "${ROBOT_GATEWAY_API_KEY:-}" ]]; then
   ROBOT_GATEWAY_API_KEY="$(value_from "$BACKEND_ENV" ROBOT_GATEWAY_API_KEY)"
