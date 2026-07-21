@@ -182,14 +182,35 @@ câmera sem salvar suas credenciais no repositório, inicia o gateway ROS/SLAM e
 publica câmera, LiDAR, telemetria e controle remoto. Ele também localiza o
 deployment de produção mais recente e abre o painel no navegador da Jetson.
 
-### Wi-Fi XD4 automático no boot
+### Wi-Fi automático no boot: XD4 com fallback para Thaina
 
 O serviço `go2-vercel.service` executa
-`scripts/prepare_thaina_network.sh` antes do gateway. Apesar do nome histórico
-do arquivo, ele ativa o perfil `XD4 Local` (SSID `XD4`) com autoconnect e
-prioridade `100`, desativa o autoconnect de perfis cujo nome contenha
-`thaina`, mantém `eth0` somente na rede local do Go2 e instala a rota default
-pela `wlan0`.
+`scripts/prepare_thaina_network.sh` antes do gateway. O script procura primeiro
+o SSID `XD4` e ativa o perfil `XD4 Local`, com prioridade de autoconnect `100`.
+Quando `XD4` não está disponível, ele cria (se necessário) e ativa o perfil
+`Thaina`, usando a senha configurada no serviço e prioridade `50`. Assim, uma
+queda posterior da rede principal também permite ao NetworkManager tentar o
+fallback automaticamente. Em ambos os casos, `eth0` permanece somente na rede
+local do Go2 e a rota default de internet usa `wlan0`.
+
+Os nomes, SSIDs e a senha podem ser alterados pelas variáveis
+`GO2_UPLINK_CONNECTION`, `GO2_UPLINK_SSID`, `GO2_FALLBACK_CONNECTION`,
+`GO2_FALLBACK_SSID` e `GO2_FALLBACK_PASSWORD` no ambiente do serviço.
+
+Por segurança, a senha do Wi-Fi não fica no repositório. Para configurá-la no
+robô, crie `/etc/oracle-go2-teleoperation/network.env` com permissão restrita:
+
+```bash
+sudo install -d -m 700 /etc/oracle-go2-teleoperation
+sudoedit /etc/oracle-go2-teleoperation/network.env
+sudo chmod 600 /etc/oracle-go2-teleoperation/network.env
+```
+
+O conteúdo do arquivo deve seguir este formato:
+
+```dotenv
+GO2_FALLBACK_PASSWORD=troque_pela_senha_da_rede
+```
 
 Para repetir todas as verificações de rede:
 

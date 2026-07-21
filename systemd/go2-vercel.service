@@ -15,10 +15,14 @@ Environment=OPEN_BROWSER=0
 Environment=PYTHONUNBUFFERED=1
 Environment=GO2_CAMERA_INTERFACE=eth0
 Environment="GO2_UPLINK_CONNECTION=XD4 Local"
+Environment=GO2_UPLINK_SSID=XD4
+Environment=GO2_FALLBACK_CONNECTION=Thaina
+Environment=GO2_FALLBACK_SSID=Thaina
 Environment=GO2_UPLINK_INTERFACE=wlan0
 Environment=GO2_ROBOT_INTERFACE=eth0
+EnvironmentFile=-/etc/oracle-go2-teleoperation/network.env
 
-# Conecta ao SSID XD4 e mantem a Ethernet 192.168.123.0/24 dedicada ao Go2.
+# Prefere o SSID XD4, usa Thaina como fallback e mantem a Ethernet do Go2.
 ExecStartPre=+/usr/bin/bash /home/unitree/Desktop/SLAM-Navigation---GO2-EDU-Mapping-Rviz-and-WebViewr-Map-/scripts/prepare_thaina_network.sh
 ExecStart=/usr/bin/bash /home/unitree/Desktop/SLAM-Navigation---GO2-EDU-Mapping-Rviz-and-WebViewr-Map-/run_vercel.sh
 
