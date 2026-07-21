@@ -113,7 +113,8 @@ export LIVEKIT_STREAM_KEY='STREAM-KEY-DO-INGRESS'
 ./robot_gateway/run_livekit_streams.sh
 ```
 
-No modo direto, o H.264 usa 900 kbps, intervalo de IDR de 0,5 segundo e WebRTC,
+No modo direto, o H.264 usa 1,5 Mbps em 1280×720, intervalo de IDR de 0,5
+segundo e WebRTC,
 evitando que o TCP acumule quadros antigos quando a rede móvel oscila. O script
 também envia 1.500 pontos por atualização com `lk room send-data`. O navegador
 acumula amostras voxelizadas até 18 mil pontos para tornar o ambiente legível.
