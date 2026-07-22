@@ -37,6 +37,9 @@ async def test_commands_are_mapped_to_gateway_routes(monkeypatch) -> None:
     await gateway.execute("set_speed", {"percent": 35})
     await gateway.execute("set_obstacle_avoidance", {"enabled": False})
     await gateway.execute("damping")
+    await gateway.execute("calibrate_docking_station")
+    await gateway.execute("start_docking")
+    await gateway.execute("cancel_docking")
     await gateway.execute("emergency_stop")
 
     assert calls == [
@@ -51,6 +54,9 @@ async def test_commands_are_mapped_to_gateway_routes(monkeypatch) -> None:
         ("POST", "/api/control/speed", {"percent": 35}),
         ("POST", "/api/control/obstacle-avoidance", {"enabled": False}),
         ("POST", "/api/control/damping", {}),
+        ("POST", "/api/docking/calibrate", {}),
+        ("POST", "/api/docking/start", {}),
+        ("POST", "/api/docking/cancel", {}),
         ("POST", "/api/control/stop", {}),
     ]
 

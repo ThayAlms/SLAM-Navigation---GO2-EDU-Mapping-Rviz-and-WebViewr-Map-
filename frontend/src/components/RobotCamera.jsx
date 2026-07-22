@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { getRobotCameraFrame } from "../services/api";
 import { isLiveKitEnabled } from "../services/livekit";
+import ArucoDetectionOverlay from "./ArucoDetectionOverlay";
 import LiveKitRobotCamera from "./LiveKitRobotCamera";
 
 const FRAME_INTERVAL_MS = 220;
@@ -14,18 +15,35 @@ function RobotCamera({
   liveKitRoom,
   liveKitConnectionState,
   liveKitErrorMessage,
+  arucoMarker,
+  arucoMarkerVisible,
 }) {
+  const detectionOverlay = (
+    <ArucoDetectionOverlay
+      marker={arucoMarker}
+      visible={connected && arucoMarkerVisible}
+    />
+  );
+
   if (isLiveKitEnabled) {
     return (
-      <LiveKitRobotCamera
-        room={liveKitRoom}
-        connectionState={liveKitConnectionState}
-        errorMessage={liveKitErrorMessage}
-      />
+      <>
+        <LiveKitRobotCamera
+          room={liveKitRoom}
+          connectionState={liveKitConnectionState}
+          errorMessage={liveKitErrorMessage}
+        />
+        {detectionOverlay}
+      </>
     );
   }
 
-  return <PollingRobotCamera accessToken={accessToken} connected={connected} />;
+  return (
+    <>
+      <PollingRobotCamera accessToken={accessToken} connected={connected} />
+      {detectionOverlay}
+    </>
+  );
 }
 
 function PollingRobotCamera({ accessToken, connected }) {

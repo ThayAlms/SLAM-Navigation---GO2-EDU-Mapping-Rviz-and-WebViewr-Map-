@@ -176,6 +176,18 @@ class RobotGatewayClient:
             return (await self._request("POST", "/api/map/reset", json={})).json()
         if command == "save_map":
             return (await self._request("POST", "/api/map/save", json={})).json()
+        if command == "calibrate_docking_station":
+            return (
+                await self._request("POST", "/api/docking/calibrate", json={})
+            ).json()
+        if command == "start_docking":
+            return (
+                await self._request("POST", "/api/docking/start", json={})
+            ).json()
+        if command == "cancel_docking":
+            return (
+                await self._request("POST", "/api/docking/cancel", json={})
+            ).json()
         if command == "emergency_stop":
             return (
                 await self._request("POST", "/api/control/stop", json={})

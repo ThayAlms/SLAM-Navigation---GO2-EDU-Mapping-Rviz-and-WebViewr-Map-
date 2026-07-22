@@ -347,6 +347,92 @@
   color: rgba(239, 242, 244, 0.76);
 }
 
+.docking-status {
+  flex-basis: 156px !important;
+  width: 156px !important;
+}
+
+.docking-status small {
+  color: var(--color-text-muted);
+  font-size: 7px;
+  letter-spacing: 0.05em;
+}
+
+.docking-status.is-ready strong,
+.docking-status.is-active strong {
+  color: #66d69e;
+}
+
+.docking-status.is-charging strong {
+  color: #69c9ee;
+}
+
+.docking-status.is-warning strong {
+  color: #ffbd66;
+}
+
+.docking-status.is-error strong,
+.docking-status.is-offline strong {
+  color: #ff8383;
+}
+
+.docking-action-button {
+  flex: 0 0 166px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 166px;
+  min-height: 36px;
+  padding: 0 11px;
+  border: 1px solid rgba(42, 169, 224, 0.42);
+  border-radius: 999px;
+  color: rgba(239, 242, 244, 0.82);
+  background: rgba(42, 169, 224, 0.08);
+  font-family: var(--font-secondary);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+
+.docking-action-button > span {
+  color: #69c9ee;
+  font-size: 13px;
+}
+
+.docking-action-button strong {
+  color: inherit;
+}
+
+.docking-action-button:not(:disabled):hover {
+  border-color: #69c9ee;
+  background: rgba(42, 169, 224, 0.16);
+  transform: translateY(-1px);
+}
+
+.docking-action-button:focus-visible {
+  outline: 2px solid rgba(42, 169, 224, 0.72);
+  outline-offset: 2px;
+}
+
+.docking-action-button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.docking-action-button--send.is-active {
+  border-color: rgba(255, 131, 131, 0.58);
+  color: #ffabab;
+  background: rgba(177, 48, 48, 0.12);
+}
+
+.docking-action-button--send.is-active > span {
+  color: #ff8383;
+}
+
 :root[data-theme="light"] .telemetry-hud {
   border-top-color: rgba(31, 65, 87, 0.1);
   background: rgba(255, 255, 255, 0.68);
@@ -369,6 +455,28 @@
   color: #425866;
 }
 
+:root[data-theme="light"] .docking-action-button {
+  border-color: rgba(18, 128, 176, 0.3);
+  color: #244553;
+  background: rgba(42, 169, 224, 0.08);
+}
+
+:root[data-theme="light"] .docking-action-button:not(:disabled):hover {
+  border-color: #0a79a8;
+  color: #0a5d7f;
+  background: rgba(42, 169, 224, 0.14);
+}
+
+:root[data-theme="light"] .docking-status.is-ready strong,
+:root[data-theme="light"] .docking-status.is-active strong {
+  color: #168355;
+}
+
+:root[data-theme="light"] .docking-status.is-error strong,
+:root[data-theme="light"] .docking-status.is-offline strong {
+  color: #b4232d;
+}
+
 @media (min-width: 768px) and (max-width: 1199px) and (min-height: 561px) {
   .dashboard-grid {
     padding-bottom: 0;
@@ -380,6 +488,10 @@
     order: 99;
     width: 100%;
     min-width: 0;
+  }
+
+  .telemetry-statuses {
+    justify-content: flex-start;
   }
 }
 
@@ -408,7 +520,9 @@
   }
 
   .telemetry-statuses > span,
-  :root[data-theme="light"] .telemetry-statuses > span {
+  :root[data-theme="light"] .telemetry-statuses > span,
+  .telemetry-statuses > .docking-action-button,
+  :root[data-theme="light"] .telemetry-statuses > .docking-action-button {
     flex: 0 0 auto !important;
     width: auto !important;
     min-width: 132px;
@@ -416,6 +530,22 @@
     padding: 0 8px !important;
     font-size: 8px;
     scroll-snap-align: start;
+  }
+
+  .telemetry-statuses > .docking-action-button {
+    min-width: 154px;
+  }
+
+  .telemetry-statuses > .docking-status {
+    order: -3;
+  }
+
+  .telemetry-statuses > .docking-action-button--send {
+    order: -2;
+  }
+
+  .telemetry-statuses > .docking-action-button--calibrate {
+    order: -1;
   }
 }
 
@@ -443,7 +573,9 @@
   }
 
   .telemetry-statuses > span,
-  :root[data-theme="light"] .telemetry-statuses > span {
+  :root[data-theme="light"] .telemetry-statuses > span,
+  .telemetry-statuses > .docking-action-button,
+  :root[data-theme="light"] .telemetry-statuses > .docking-action-button {
     flex: 0 0 auto !important;
     width: auto !important;
     min-width: 118px;
@@ -451,6 +583,22 @@
     padding: 0 8px !important;
     font-size: 8px;
     scroll-snap-align: start;
+  }
+
+  .telemetry-statuses > .docking-action-button {
+    min-width: 144px;
+  }
+
+  .telemetry-statuses > .docking-status {
+    order: -3;
+  }
+
+  .telemetry-statuses > .docking-action-button--send {
+    order: -2;
+  }
+
+  .telemetry-statuses > .docking-action-button--calibrate {
+    order: -1;
   }
 
   :root[data-theme="light"] .telemetry-hud {

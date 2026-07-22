@@ -19,6 +19,8 @@ import numpy as np
 import rclpy
 from rclpy.executors import MultiThreadedExecutor
 
+from aruco_tracker import ArucoTracker
+
 ROOT = Path(__file__).resolve().parent
 SLAM_DIR = ROOT.parent / "go2_native_ws" / "go2_slam"
 sys.path.insert(0, str(SLAM_DIR))
@@ -34,16 +36,25 @@ class CameraStream:
         "video/x-raw,format=BGR ! appsink drop=true max-buffers=1 sync=false"
     )
 
-    def __init__(self):
+    def __init__(self, marker_callback=None):
         self.condition = threading.Condition()
         self.jpeg = None
+        self.frame = None
         self.sequence = 0
         self.connected = False
+        self.marker_callback = marker_callback
+        self.aruco = ArucoTracker()
         self.stop_event = threading.Event()
         self.thread = threading.Thread(target=self._run, name="go2-camera", daemon=True)
+        self.marker_thread = threading.Thread(
+            target=self._track_markers,
+            name="go2-aruco",
+            daemon=True,
+        )
 
     def start(self):
         self.thread.start()
+        self.marker_thread.start()
 
     def _run(self):
         while not self.stop_event.is_set():
@@ -70,11 +81,28 @@ class CameraStream:
                 if not encoded:
                     continue
                 with self.condition:
+                    self.frame = frame
                     self.jpeg = buffer.tobytes()
                     self.sequence += 1
                     self.condition.notify_all()
             capture.release()
             time.sleep(0.25)
+
+    def _track_markers(self):
+        while not self.stop_event.wait(0.5):
+            with self.condition:
+                frame = self.frame
+                if frame is not None:
+                    frame = frame.copy()
+            observation = self.aruco.detect(frame)
+            if self.marker_callback:
+                self.marker_callback(observation)
+
+    def latest_marker(self):
+        return self.aruco.latest()
+
+    def marker_status(self):
+        return self.aruco.status()
 
     def wait_frame(self, last_sequence, timeout=2.0):
         with self.condition:
@@ -89,6 +117,7 @@ class CameraStream:
         with self.condition:
             self.condition.notify_all()
         self.thread.join(timeout=2.0)
+        self.marker_thread.join(timeout=2.0)
 
 
 class RobotGatewayRuntime:
@@ -96,7 +125,7 @@ class RobotGatewayRuntime:
         rclpy.init()
         self.gateway_key = gateway_key
         self.node = Go2MappingNode()
-        self.camera = CameraStream()
+        self.camera = CameraStream(self.node.update_docking_marker)
         self.executor = MultiThreadedExecutor(num_threads=4)
         self.executor.add_node(self.node)
         self.ros_thread = threading.Thread(target=self.executor.spin, name="go2-ros", daemon=True)
@@ -117,6 +146,7 @@ class RobotGatewayRuntime:
     def status(self):
         status = self.node.status_dict()
         status["camera_connected"] = self.camera.connected
+        status.update(self.camera.marker_status())
         return status
 
     def map_points(self):
@@ -236,7 +266,23 @@ class RobotGatewayHandler(BaseHTTPRequestHandler):
                         "armed": armed,
                     }
                 )
+            elif path == "/api/docking/calibrate":
+                calibration = self.runtime.node.calibrate_docking_station(
+                    self.runtime.camera.latest_marker()
+                )
+                self._json({"ok": True, "calibration": calibration})
+            elif path == "/api/docking/start":
+                docking = self.runtime.node.start_docking()
+                self._json({"ok": True, **docking})
+            elif path == "/api/docking/cancel":
+                self.runtime.node.cancel_docking(
+                    "Retorno à base cancelado pelo operador."
+                )
+                self._json({"ok": True, "docking_active": False})
             elif path == "/api/control/stop":
+                self.runtime.node.cancel_docking(
+                    "Retorno à base cancelado pela parada de emergência."
+                )
                 self.runtime.node.arm_control(False)
                 self.runtime.node.stop_motion()
                 self._json({"ok": True})
@@ -257,14 +303,23 @@ class RobotGatewayHandler(BaseHTTPRequestHandler):
         if command != "stop" and not self.runtime.node._control_armed:
             raise PermissionError("controle bloqueado; habilite-o antes de mover")
         if command == "stop":
+            self.runtime.node.cancel_docking(
+                "Retorno à base cancelado pelo operador."
+            )
             self.runtime.node.stop_motion(clear_safety_block=True)
         else:
+            self.runtime.node.cancel_docking(
+                "Retorno à base cancelado por comando manual."
+            )
             self.runtime.node.move_command(command)
         self._json({"ok": True, "command": command})
 
     def _joystick(self, body):
         if not self.runtime.node._control_armed:
             raise PermissionError("controle bloqueado; habilite-o antes de mover")
+        self.runtime.node.cancel_docking(
+            "Retorno à base cancelado pelo controle manual."
+        )
         velocity = self.runtime.node.move_analog(
             body.get("forward"),
             body.get("lateral"),
@@ -283,6 +338,9 @@ class RobotGatewayHandler(BaseHTTPRequestHandler):
         )
 
     def _posture(self, command):
+        self.runtime.node.cancel_docking(
+            "Retorno à base cancelado pela mudança de postura."
+        )
         actual = command
         if command == "toggle":
             actual = self.runtime.node.toggle_posture()

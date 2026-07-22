@@ -29,6 +29,21 @@ OFFLINE_STATUS = {
     "autonomy_minutes": None,
     "current_speed_mps": 0.0,
     "robot_activity_status": "stopped",
+    "aruco_available": False,
+    "docking_station_calibrated": False,
+    "docking_station_calibrated_at": None,
+    "docking_station_point_count": 0,
+    "docking_station_marker_calibrated": False,
+    "docking_calibration_ready": False,
+    "docking_marker_visible": False,
+    "docking_marker_matches_station": False,
+    "docking_active": False,
+    "docking_state": "unavailable",
+    "docking_message": None,
+    "docking_error": None,
+    "docking_distance_m": None,
+    "docking_adjustment_count": 0,
+    "docking_next_adjustment_seconds": None,
     "video_stream_url": None,
     "map_data_url": None,
     "last_seen_at": None,
@@ -161,6 +176,11 @@ async def queue_command(
     gateway: Annotated[RobotGatewayClient, Depends(get_robot_gateway)],
 ) -> dict:
     safety_commands = {"stop", "emergency_stop", "damping", "disarm"}
+    low_battery_allowed_commands = safety_commands | {
+        "calibrate_docking_station",
+        "start_docking",
+        "cancel_docking",
+    }
 
     if gateway.configured:
         try:
@@ -175,7 +195,7 @@ async def queue_command(
                 )
             battery = direct_status.get("battery_percent")
             if (
-                payload.command.value not in safety_commands
+                payload.command.value not in low_battery_allowed_commands
                 and battery is not None
                 and battery <= 5
             ):
@@ -217,7 +237,7 @@ async def queue_command(
         )
     battery = current_status.get("battery_percent")
     if (
-        payload.command.value not in safety_commands
+        payload.command.value not in low_battery_allowed_commands
         and battery is not None
         and battery <= 5
     ):

@@ -33,6 +33,9 @@ ALLOWED_COMMANDS = {
     "damping",
     "reset_map",
     "save_map",
+    "calibrate_docking_station",
+    "start_docking",
+    "cancel_docking",
     "stop",
     "emergency_stop",
 }
@@ -123,6 +126,12 @@ def gateway_action(command, payload):
         return "/api/map/reset", {}
     if command == "save_map":
         return "/api/map/save", {}
+    if command == "calibrate_docking_station":
+        return "/api/docking/calibrate", {}
+    if command == "start_docking":
+        return "/api/docking/start", {}
+    if command == "cancel_docking":
+        return "/api/docking/cancel", {}
     if command == "emergency_stop":
         return "/api/control/stop", {}
     raise ValueError("comando não reconhecido")

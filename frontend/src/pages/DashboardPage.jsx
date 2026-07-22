@@ -18,6 +18,10 @@ import {
 import { isLiveKitEnabled } from "../services/livekit";
 import { publishLiveKitCommand } from "../services/livekitCommands";
 import {
+  dockingDistanceLabel,
+  readDockingPresentation,
+} from "../services/dockingTelemetry";
+import {
   formatAutonomy,
   formatBatteryPercent,
   formatCurrentSpeed,
@@ -45,6 +49,20 @@ const OFFLINE_STATUS = {
   autonomy_minutes: null,
   current_speed_mps: 0,
   robot_activity_status: "stopped",
+  aruco_available: false,
+  docking_station_calibrated: false,
+  docking_station_marker_calibrated: false,
+  docking_calibration_ready: false,
+  docking_marker_visible: false,
+  docking_marker: null,
+  docking_marker_matches_station: false,
+  docking_active: false,
+  docking_state: "unavailable",
+  docking_message: null,
+  docking_error: null,
+  docking_distance_m: null,
+  docking_adjustment_count: 0,
+  docking_next_adjustment_seconds: null,
   sport_state: null,
   control_armed: false,
   posture: "unknown",
@@ -621,6 +639,27 @@ function DashboardPage() {
     robotStatus.charging,
   );
   const activity = readRobotActivity(robotStatus);
+  const dockingPresentation = readDockingPresentation(robotStatus);
+  const dockingDistance = dockingDistanceLabel(
+    robotStatus.docking_distance_m,
+  );
+  const dockingActive = Boolean(robotStatus.docking_active);
+  const dockingCalibrated = Boolean(
+    robotStatus.docking_station_calibrated,
+  );
+  const calibrationReady = Boolean(robotStatus.docking_calibration_ready);
+  const dockingActionPending = [
+    "start_docking",
+    "cancel_docking",
+  ].includes(pendingAction);
+  const dockingActionDisabled = dockingActive
+    ? dockingActionPending
+    : !robotStatus.sdk_connected ||
+      !dockingCalibrated ||
+      robotStatus.charging ||
+      Boolean(pendingAction);
+  const calibrationDisabled =
+    !calibrationReady || dockingActive || Boolean(pendingAction);
   const batteryTone = !robotStatus.battery_connected
     ? "is-offline"
     : robotStatus.charging
@@ -871,6 +910,8 @@ function DashboardPage() {
                 liveKitRoom={liveKit.room}
                 liveKitConnectionState={liveKit.connectionState}
                 liveKitErrorMessage={liveKit.errorMessage}
+                arucoMarker={robotStatus.docking_marker}
+                arucoMarkerVisible={robotStatus.docking_marker_visible}
               />
               <div className="viewport-controls viewport-controls--camera">
                 <OracleButton
@@ -1283,6 +1324,68 @@ function DashboardPage() {
               <span>
                 STATUS · <strong className={`is-${activity.key}`}>{activity.label}</strong>
               </span>
+              <span className={`docking-status is-${dockingPresentation.tone}`}>
+                BASE · <strong>{dockingPresentation.label}</strong>
+                {dockingDistance && <small>{dockingDistance}</small>}
+              </span>
+              <button
+                className={`docking-action-button docking-action-button--send ${dockingActive ? "is-active" : ""}`}
+                type="button"
+                disabled={dockingActionDisabled}
+                title={
+                  dockingActive
+                    ? "Interromper o retorno autônomo à base"
+                    : !dockingCalibrated
+                      ? "Calibre a estação antes do primeiro retorno"
+                      : robotStatus.charging
+                        ? "O robô já está carregando"
+                        : robotStatus.docking_error || robotStatus.docking_message || undefined
+                }
+                onClick={() =>
+                  handleAction(
+                    dockingActive ? "cancel_docking" : "start_docking",
+                    {},
+                    dockingActive
+                      ? "Retorno à base cancelado."
+                      : "Retorno à base iniciado com anticolisão automático.",
+                  )
+                }
+              >
+                <span aria-hidden="true">⌂</span>
+                <strong>
+                  {dockingActionPending
+                    ? "AGUARDE..."
+                    : dockingActive
+                      ? "CANCELAR RETORNO"
+                      : "ENVIAR À BASE"}
+                </strong>
+              </button>
+              <button
+                className="docking-action-button docking-action-button--calibrate"
+                type="button"
+                disabled={calibrationDisabled}
+                title={
+                  calibrationReady
+                    ? "Salvar a pose atual, os pontos locais e a tag da estação"
+                    : "Disponível quando o BMS confirmar que o robô está carregando"
+                }
+                onClick={() =>
+                  handleAction(
+                    "calibrate_docking_station",
+                    {},
+                    robotStatus.docking_marker_visible
+                      ? "Estação calibrada com pose, pontos e tag visual."
+                      : "Estação calibrada com pose e pontos do mapa.",
+                  )
+                }
+              >
+                <span aria-hidden="true">◎</span>
+                <strong>
+                  {pendingAction === "calibrate_docking_station"
+                    ? "CALIBRANDO..."
+                    : "CALIBRAR ESTAÇÃO"}
+                </strong>
+              </button>
             </div>
           </div>
         </section>

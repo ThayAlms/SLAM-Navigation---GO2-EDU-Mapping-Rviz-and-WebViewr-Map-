@@ -21,6 +21,9 @@ class RobotCommandName(str, Enum):
     DAMPING = "damping"
     RESET_MAP = "reset_map"
     SAVE_MAP = "save_map"
+    CALIBRATE_DOCKING_STATION = "calibrate_docking_station"
+    START_DOCKING = "start_docking"
+    CANCEL_DOCKING = "cancel_docking"
     STOP = "stop"
     EMERGENCY_STOP = "emergency_stop"
 

@@ -35,6 +35,20 @@ class GatewayActionTest(unittest.TestCase):
             with self.subTest(payload=payload), self.assertRaises(ValueError):
                 gateway_action("move_analog", payload)
 
+    def test_maps_docking_commands_to_dedicated_routes(self):
+        self.assertEqual(
+            gateway_action("calibrate_docking_station", {}),
+            ("/api/docking/calibrate", {}),
+        )
+        self.assertEqual(
+            gateway_action("start_docking", {}),
+            ("/api/docking/start", {}),
+        )
+        self.assertEqual(
+            gateway_action("cancel_docking", {}),
+            ("/api/docking/cancel", {}),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

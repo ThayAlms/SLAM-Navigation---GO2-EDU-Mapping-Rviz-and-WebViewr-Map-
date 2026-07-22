@@ -34,6 +34,13 @@ from std_srvs.srv import Trigger
 from unitree_api.msg import Request, Response
 from unitree_go.msg import LowState, SportModeState
 
+from docking import (
+    calibration_is_usable,
+    marker_correction,
+    marker_matches,
+    navigation_command,
+    valid_pose,
+)
 from motion_profile import (
     DEFAULT_SPEED_PERCENT,
     MAX_FORWARD_SPEED_MPS,
@@ -85,6 +92,12 @@ BATTERY_SAMPLE_INTERVAL_SECONDS = 0.5
 BATTERY_CAPACITY_WH = 236.8
 CHARGING_CURRENT_THRESHOLD_MA = 500
 DISCHARGE_POWER_SMOOTHING = 0.15
+DOCKING_CONTROL_PERIOD_SECONDS = 0.1
+DOCKING_ADJUSTMENT_INTERVAL_SECONDS = 10.0
+DOCKING_ADJUSTMENT_DURATION_SECONDS = 0.55
+DOCKING_TIMEOUT_SECONDS = 5 * 60.0
+DOCKING_MAX_ADJUSTMENTS = 30
+DOCKING_MARKER_MAX_AGE_SECONDS = 2.0
 SAFETY_REASON_MESSAGES = {
     "native_avoidance_unconfirmed": "anticolisão nativo ainda não confirmado",
     "avoidance_mode_unconfirmed": "modo do anticolisão ainda não confirmado",
@@ -117,6 +130,10 @@ class Go2MappingNode(Node):
         self.declare_parameter("maps_directory", default_maps)
         self.declare_parameter("interactive", True)
         self.declare_parameter("battery_capacity_wh", BATTERY_CAPACITY_WH)
+        self.declare_parameter(
+            "docking_station_file",
+            str(Path(default_maps) / "charging_station.json"),
+        )
 
         self.voxel_size = float(self.get_parameter("voxel_size").value)
         self.min_voxel_hits = int(self.get_parameter("min_voxel_hits").value)
@@ -155,7 +172,11 @@ class Go2MappingNode(Node):
         self.battery_capacity_wh = max(
             1.0, float(self.get_parameter("battery_capacity_wh").value)
         )
+        self.docking_station_file = Path(
+            str(self.get_parameter("docking_station_file").value)
+        ).expanduser()
         self.maps_directory.mkdir(parents=True, exist_ok=True)
+        self.docking_station_file.parent.mkdir(parents=True, exist_ok=True)
 
         self._lock = threading.Lock()
         self._voxels = {}
@@ -173,12 +194,32 @@ class Go2MappingNode(Node):
         self._last_odom_jump_at = 0.0
         self._last_saved_count = -1
         self._latest_odom = None
+        self._latest_odom_stamp_seconds = None
         self._latest_imu = None
         self._latest_sport_state = None
         self._last_sport_state_at = 0.0
         self._latest_battery = None
         self._last_battery_at = 0.0
         self._smoothed_discharge_power_w = None
+        self._docking_marker = None
+        self._last_docking_marker_at = 0.0
+        self._docking_station = self._load_docking_station()
+        self._docking_active = False
+        self._docking_state = (
+            "idle" if self._docking_station is not None else "uncalibrated"
+        )
+        self._docking_message = (
+            "Estação calibrada."
+            if self._docking_station is not None
+            else "Calibre a estação enquanto o robô estiver carregando."
+        )
+        self._docking_error = None
+        self._docking_started_at = 0.0
+        self._docking_last_distance_m = None
+        self._docking_adjustment_count = 0
+        self._docking_next_adjustment_at = 0.0
+        self._docking_adjustment_until = 0.0
+        self._docking_adjustment_velocity = (0.0, 0.0, 0.0)
         self._posture_state = "unknown"
         self._posture_target = None
         self._posture_command_at = 0.0
@@ -328,6 +369,11 @@ class Go2MappingNode(Node):
             self._ensure_native_obstacle_avoidance,
             callback_group=self._control_callback_group,
         )
+        self.docking_timer = self.create_timer(
+            DOCKING_CONTROL_PERIOD_SECONDS,
+            self._docking_control_tick,
+            callback_group=self._control_callback_group,
+        )
 
         self.get_logger().info(
             "SLAM robusto iniciado: %s + %s -> /go2_slam/map_cloud"
@@ -339,6 +385,56 @@ class Go2MappingNode(Node):
         )
         self.get_logger().warning(
             "Anticolisão nativo do Go2 solicitado via obstacles_avoid."
+        )
+
+    def _load_docking_station(self):
+        try:
+            with open(self.docking_station_file, "r", encoding="utf-8") as stream:
+                payload = json.load(stream)
+            if (
+                isinstance(payload, dict)
+                and payload.get("schema_version") == 1
+                and valid_pose(payload.get("pose"))
+            ):
+                return payload
+        except FileNotFoundError:
+            return None
+        except (OSError, ValueError, TypeError) as error:
+            self.get_logger().error(
+                "Falha ao carregar calibração da estação: %s" % error
+            )
+        return None
+
+    def _write_docking_station(self, calibration):
+        temporary = self.docking_station_file.with_suffix(".json.tmp")
+        with open(temporary, "w", encoding="utf-8") as stream:
+            json.dump(calibration, stream, ensure_ascii=False, indent=2)
+            stream.write("\n")
+        os.replace(str(temporary), str(self.docking_station_file))
+
+    def update_docking_marker(self, observation):
+        if not isinstance(observation, dict):
+            return
+        with self._control_lock:
+            self._docking_marker = dict(observation)
+            self._last_docking_marker_at = time.monotonic()
+
+    def _fresh_docking_marker(self, now=None):
+        now = time.monotonic() if now is None else now
+        if (
+            self._docking_marker is None
+            or now - self._last_docking_marker_at
+            > DOCKING_MARKER_MAX_AGE_SECONDS
+        ):
+            return None
+        return dict(self._docking_marker)
+
+    def _battery_is_charging(self):
+        return bool(
+            self._latest_battery
+            and self._latest_battery.get("charging")
+            and time.monotonic() - self._last_battery_at
+            < BATTERY_STATUS_TIMEOUT_SECONDS
         )
 
     def _odom_callback(self, msg):
@@ -373,6 +469,10 @@ class Go2MappingNode(Node):
                 )
                 return
         self._latest_odom = current
+        self._latest_odom_stamp_seconds = (
+            float(msg.header.stamp.sec)
+            + float(msg.header.stamp.nanosec) / 1_000_000_000.0
+        )
         self._last_odom_at = now
         if self._origin_odom is None:
             self._origin_odom = dict(current)
@@ -929,6 +1029,22 @@ class Go2MappingNode(Node):
         )
         charging = bool(battery and battery["charging"])
         robot_activity = activity_status(charging, speed_mps)
+        docking_marker = self._fresh_docking_marker(now)
+        docking_station = self._docking_station
+        docking_reference_marker = (
+            docking_station.get("marker") if docking_station else None
+        )
+        docking_next_adjustment_seconds = None
+        if self._docking_active and self._docking_next_adjustment_at > now:
+            docking_next_adjustment_seconds = round(
+                self._docking_next_adjustment_at - now,
+                1,
+            )
+        docking_elapsed_seconds = (
+            round(now - self._docking_started_at, 1)
+            if self._docking_active and self._docking_started_at
+            else None
+        )
         with self._lock:
             point_count = sum(
                 self._voxel_hits.get(key, 0) >= self.min_voxel_hits
@@ -960,6 +1076,43 @@ class Go2MappingNode(Node):
             ),
             "current_speed_mps": round(speed_mps, 3),
             "robot_activity_status": robot_activity,
+            "docking_station_calibrated": docking_station is not None,
+            "docking_station_calibrated_at": (
+                docking_station.get("calibrated_at")
+                if docking_station
+                else None
+            ),
+            "docking_station_pose": (
+                docking_station.get("pose") if docking_station else None
+            ),
+            "docking_station_point_count": (
+                int(docking_station.get("point_count", 0))
+                if docking_station
+                else 0
+            ),
+            "docking_station_marker_calibrated": bool(
+                docking_reference_marker
+            ),
+            "docking_calibration_ready": bool(charging and odom_connected),
+            "docking_marker_visible": docking_marker is not None,
+            "docking_marker": docking_marker,
+            "docking_marker_matches_station": marker_matches(
+                docking_marker,
+                docking_reference_marker,
+            ),
+            "docking_active": self._docking_active,
+            "docking_state": self._docking_state,
+            "docking_message": self._docking_message,
+            "docking_error": self._docking_error,
+            "docking_distance_m": self._docking_last_distance_m,
+            "docking_elapsed_seconds": docking_elapsed_seconds,
+            "docking_adjustment_count": self._docking_adjustment_count,
+            "docking_next_adjustment_seconds": (
+                docking_next_adjustment_seconds
+            ),
+            "docking_adjustment_interval_seconds": (
+                DOCKING_ADJUSTMENT_INTERVAL_SECONDS
+            ),
             "control_armed": self._control_armed,
             "moving": self._moving,
             "last_command": self._last_command,
@@ -1185,6 +1338,325 @@ class Go2MappingNode(Node):
         response.message = "Mapa reiniciado."
         return response
 
+    def calibrate_docking_station(self, marker=None):
+        with self._control_lock:
+            now = time.monotonic()
+            if not self._battery_is_charging():
+                raise RuntimeError(
+                    "calibração liberada somente quando o BMS confirmar carregamento"
+                )
+            if (
+                self._latest_odom is None
+                or now - self._last_odom_at > ROBOT_STATUS_TIMEOUT_SECONDS
+            ):
+                raise RuntimeError("odometria indisponível para calibrar a estação")
+            selected_marker = (
+                dict(marker)
+                if isinstance(marker, dict)
+                else self._fresh_docking_marker(now)
+            )
+            points = self._snapshot(5000)
+            local_reference_points = []
+            if points.size:
+                pose = self._latest_odom
+                distances = np.hypot(
+                    points[:, 0] - pose["x"],
+                    points[:, 1] - pose["y"],
+                )
+                local = points[distances <= 1.5, :3]
+                if local.shape[0] > 300:
+                    indexes = np.linspace(
+                        0,
+                        local.shape[0] - 1,
+                        300,
+                        dtype=np.int64,
+                    )
+                    local = local[indexes]
+                local_reference_points = np.round(local, 3).tolist()
+
+            calibration = {
+                "schema_version": 1,
+                "calibrated_at": datetime.now().astimezone().isoformat(),
+                "frame": self._map_frame,
+                "pose": dict(self._latest_odom),
+                "location": self._current_location(),
+                "origin_odom": (
+                    dict(self._origin_odom) if self._origin_odom else None
+                ),
+                "odom_stamp_seconds": self._latest_odom_stamp_seconds,
+                "marker": selected_marker,
+                "map_reference_points": local_reference_points,
+                "point_count": len(local_reference_points),
+            }
+            self._write_docking_station(calibration)
+            self._docking_station = calibration
+            self._docking_state = "charging"
+            self._docking_message = (
+                "Estação calibrada com tag visual e pose do mapa."
+                if selected_marker
+                else "Estação calibrada pela pose do mapa; tag não estava visível."
+            )
+            self._docking_error = None
+        self.get_logger().warning(self._docking_message)
+        return calibration
+
+    def start_docking(self):
+        with self._control_lock:
+            if self._battery_is_charging():
+                self._docking_active = False
+                self._docking_state = "charging"
+                self._docking_message = "O robô já está carregando."
+                return {
+                    "docking_active": False,
+                    "docking_state": self._docking_state,
+                }
+            if self._posture_state != "standing":
+                raise RuntimeError(
+                    "o robô precisa estar em pé para retornar à base"
+                )
+            if (
+                self._latest_odom is None
+                or time.monotonic() - self._last_odom_at
+                > ROBOT_STATUS_TIMEOUT_SECONDS
+            ):
+                raise RuntimeError("odometria indisponível para retornar à base")
+            usable, reason = calibration_is_usable(
+                self._docking_station,
+                self._latest_odom,
+                self._latest_odom_stamp_seconds,
+                self._map_frame,
+            )
+            if not usable:
+                raise RuntimeError(reason)
+            if self._docking_active:
+                return {
+                    "docking_active": True,
+                    "docking_state": self._docking_state,
+                }
+
+            self.stop_motion(force=True, clear_safety_block=True)
+            self._obstacle_avoidance_requested = True
+            if self._native_avoidance_enabled is not True:
+                self._native_avoidance_confirmed_at = 0.0
+            self._request_obstacle_avoidance_state(True)
+            self._control_armed = True
+            self._set_remote_command_source(True)
+            self._docking_active = True
+            self._docking_state = "enabling_safety"
+            self._docking_message = (
+                "Ativando anticolisão antes do retorno à base."
+            )
+            self._docking_error = None
+            self._docking_started_at = time.monotonic()
+            self._docking_last_distance_m = None
+            self._docking_adjustment_count = 0
+            self._docking_next_adjustment_at = 0.0
+            self._docking_adjustment_until = 0.0
+            self._docking_adjustment_velocity = (0.0, 0.0, 0.0)
+        self.get_logger().warning(
+            "Retorno à estação iniciado com anticolisão obrigatório."
+        )
+        return {
+            "docking_active": True,
+            "docking_state": self._docking_state,
+        }
+
+    def cancel_docking(self, message="Retorno à base cancelado."):
+        with self._control_lock:
+            was_active = self._docking_active
+            if not was_active:
+                return False
+            self._docking_active = False
+            self._docking_state = "cancelled"
+            self._docking_message = message
+            self._docking_error = None
+            self._docking_adjustment_until = 0.0
+            self._docking_adjustment_velocity = (0.0, 0.0, 0.0)
+            self.stop_motion(force=True, clear_safety_block=True)
+        self.get_logger().warning(message)
+        return True
+
+    def _fail_docking(self, message):
+        self.stop_motion(force=True, clear_safety_block=False)
+        self._docking_active = False
+        self._docking_state = "error"
+        self._docking_message = message
+        self._docking_error = message
+        self._docking_adjustment_until = 0.0
+        self._docking_adjustment_velocity = (0.0, 0.0, 0.0)
+        self._control_armed = False
+        self._set_remote_command_source(False)
+        self.get_logger().error("Retorno à base interrompido: %s" % message)
+
+    def _complete_docking(self):
+        self.stop_motion(force=True, clear_safety_block=True)
+        self._docking_active = False
+        self._docking_state = "charging"
+        self._docking_message = "Carregamento confirmado pelo BMS."
+        self._docking_error = None
+        self._docking_adjustment_until = 0.0
+        self._docking_adjustment_velocity = (0.0, 0.0, 0.0)
+        self._control_armed = False
+        self._set_remote_command_source(False)
+        self.get_logger().warning(
+            "Estação alcançada: carregamento confirmado pelo BMS."
+        )
+
+    def _docking_control_tick(self):
+        with self._control_lock:
+            now = time.monotonic()
+            if not self._docking_active:
+                if self._battery_is_charging():
+                    self._docking_state = (
+                        "charging"
+                        if self._docking_station is not None
+                        else "ready_to_calibrate"
+                    )
+                    self._docking_message = (
+                        "Carregando. A estação pode ser recalibrada."
+                        if self._docking_station is not None
+                        else "Carregamento detectado; calibre a estação."
+                    )
+                elif self._docking_state in {
+                    "charging",
+                    "ready_to_calibrate",
+                }:
+                    self._docking_state = (
+                        "idle"
+                        if self._docking_station is not None
+                        else "uncalibrated"
+                    )
+                return
+            if self._battery_is_charging():
+                self._complete_docking()
+                return
+            if (
+                self._latest_battery is None
+                or now - self._last_battery_at >= BATTERY_STATUS_TIMEOUT_SECONDS
+            ):
+                self._fail_docking("BMS indisponível para confirmar o encaixe")
+                return
+            if now - self._docking_started_at > DOCKING_TIMEOUT_SECONDS:
+                self._fail_docking("tempo máximo de cinco minutos excedido")
+                return
+            if self._docking_adjustment_count >= DOCKING_MAX_ADJUSTMENTS:
+                self._fail_docking("limite de ajustes de encaixe excedido")
+                return
+            if self._posture_state != "standing":
+                self._fail_docking("postura deixou de estar em pé")
+                return
+            if self._safety_blocked:
+                self._fail_docking(
+                    "anticolisão encontrou um limite; libere o caminho e tente novamente"
+                )
+                return
+            if (
+                self._latest_odom is None
+                or now - self._last_odom_at > ROBOT_STATUS_TIMEOUT_SECONDS
+            ):
+                self._fail_docking("odometria perdida durante o retorno")
+                return
+            if not self._obstacle_avoidance_requested:
+                self._obstacle_avoidance_requested = True
+                self._request_obstacle_avoidance_state(True)
+            if not self._native_avoidance_ready(now):
+                self.stop_motion(force=True)
+                self._ensure_native_obstacle_avoidance()
+                self._docking_state = "enabling_safety"
+                self._docking_message = "Confirmando anticolisão nativo."
+                return
+            if not self._remote_source_operational():
+                self.stop_motion(force=True)
+                self._set_remote_command_source(True)
+                self._docking_state = "enabling_control"
+                self._docking_message = "Confirmando canal de controle."
+                return
+
+            usable, reason = calibration_is_usable(
+                self._docking_station,
+                self._latest_odom,
+                self._latest_odom_stamp_seconds,
+                self._map_frame,
+            )
+            if not usable:
+                self._fail_docking(reason)
+                return
+
+            if now < self._docking_adjustment_until:
+                try:
+                    self.move(*self._docking_adjustment_velocity)
+                except RuntimeError as error:
+                    self._fail_docking(str(error))
+                return
+            if self._docking_adjustment_until:
+                self.stop_motion(force=True)
+                self._docking_adjustment_until = 0.0
+                self._docking_adjustment_velocity = (0.0, 0.0, 0.0)
+                self._docking_next_adjustment_at = (
+                    now + DOCKING_ADJUSTMENT_INTERVAL_SECONDS
+                )
+
+            command = navigation_command(
+                self._latest_odom,
+                self._docking_station["pose"],
+            )
+            self._docking_last_distance_m = round(
+                command["distance_m"], 3
+            )
+            if not command["arrived"]:
+                self._docking_state = "navigating"
+                self._docking_message = (
+                    "Retornando à base · %.2f m restantes."
+                    % command["distance_m"]
+                )
+                try:
+                    self.move(*command["velocity"])
+                except RuntimeError as error:
+                    self._fail_docking(str(error))
+                return
+
+            self.stop_motion()
+            if now < self._docking_next_adjustment_at:
+                self._docking_state = "verifying_charge"
+                self._docking_message = (
+                    "Posição alcançada; aguardando confirmação do carregamento."
+                )
+                return
+
+            reference_marker = self._docking_station.get("marker")
+            current_marker = self._fresh_docking_marker(now)
+            correction = marker_correction(
+                current_marker,
+                reference_marker,
+            )
+            if reference_marker and correction is None:
+                self._docking_adjustment_count += 1
+                self._docking_next_adjustment_at = (
+                    now + DOCKING_ADJUSTMENT_INTERVAL_SECONDS
+                )
+                self._docking_state = "waiting_marker"
+                self._docking_message = (
+                    "Tag da estação não visível; nova leitura em 10 segundos."
+                )
+                return
+            if correction is None:
+                correction = {"velocity": (0.035, 0.0, 0.0)}
+
+            self._docking_adjustment_count += 1
+            self._docking_adjustment_velocity = correction["velocity"]
+            self._docking_adjustment_until = (
+                now + DOCKING_ADJUSTMENT_DURATION_SECONDS
+            )
+            self._docking_state = "adjusting"
+            self._docking_message = (
+                "Ajuste fino %d · verificando o carregamento."
+                % self._docking_adjustment_count
+            )
+            try:
+                self.move(*self._docking_adjustment_velocity)
+            except RuntimeError as error:
+                self._fail_docking(str(error))
+
     def arm_control(self, enabled):
         enabled = bool(enabled)
         if enabled:
@@ -1196,6 +1668,9 @@ class Go2MappingNode(Node):
             self._control_armed = True
             self._set_remote_command_source(True)
         else:
+            self.cancel_docking(
+                "Retorno à base cancelado pelo bloqueio do controle."
+            )
             self._control_armed = False
             self.stop_motion(clear_safety_block=True)
             self._set_remote_command_source(False)
@@ -1206,6 +1681,10 @@ class Go2MappingNode(Node):
     def set_obstacle_avoidance(self, enabled):
         if not isinstance(enabled, bool):
             raise ValueError("informe true ou false para o anticolisão")
+        if not enabled:
+            self.cancel_docking(
+                "Retorno à base cancelado porque o anticolisão foi desativado."
+            )
         with self._control_lock:
             self.stop_motion(force=True, clear_safety_block=True)
             self._obstacle_avoidance_requested = enabled
@@ -1323,6 +1802,9 @@ class Go2MappingNode(Node):
             self._publish_remote_move(*self._active_velocity)
 
     def move_command(self, command):
+        self.cancel_docking(
+            "Retorno à base cancelado por comando manual."
+        )
         profile = MOTION_PROFILES.get(command)
         if profile is None:
             raise ValueError("comando de movimento inválido")
@@ -1357,6 +1839,9 @@ class Go2MappingNode(Node):
         )
 
     def move_analog(self, forward, lateral, yaw):
+        self.cancel_docking(
+            "Retorno à base cancelado pelo controle manual."
+        )
         if self._safety_blocked:
             raise RuntimeError(
                 "movimento bloqueado: %s; solte o controle antes de tentar novamente"
@@ -1430,6 +1915,9 @@ class Go2MappingNode(Node):
             self._last_command_at = now
 
     def set_posture(self, posture):
+        self.cancel_docking(
+            "Retorno à base cancelado pela mudança de postura."
+        )
         if not self._control_armed:
             raise PermissionError(
                 "controle bloqueado; habilite-o antes de mudar a postura"
@@ -1469,6 +1957,9 @@ class Go2MappingNode(Node):
         )
 
     def damping(self):
+        self.cancel_docking(
+            "Retorno à base cancelado pela parada de emergência."
+        )
         with self._control_lock:
             self.stop_motion(force=True, clear_safety_block=True)
             request = self._new_sport_request(DAMP_API_ID)
