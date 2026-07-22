@@ -57,10 +57,12 @@ from motion_profile import (
     velocity_limits,
 )
 from telemetry import (
+    ROBOT_TEMPERATURE_HIGH_C,
     activity_status,
     current_speed_mps,
     discharge_power_w,
     estimate_autonomy_minutes,
+    motor_temperature_summary,
 )
 
 DAMP_API_ID = 1001
@@ -599,6 +601,11 @@ class Go2MappingNode(Node):
                 self._smoothed_discharge_power_w,
             )
 
+        motor_temperature = motor_temperature_summary(msg.motor_state)
+        robot_temperature_c = (
+            motor_temperature["maximum_c"] if motor_temperature else None
+        )
+
         self._last_battery_at = now
         self._latest_battery = {
             "percent": percent,
@@ -608,6 +615,16 @@ class Go2MappingNode(Node):
             "status_code": int(bms.status),
             "charging": charging,
             "autonomy_minutes": autonomy_minutes,
+            "robot_temperature_c": robot_temperature_c,
+            "robot_temperature_average_c": (
+                motor_temperature["average_c"]
+                if motor_temperature
+                else None
+            ),
+            "robot_temperature_high": bool(
+                robot_temperature_c is not None
+                and robot_temperature_c >= ROBOT_TEMPERATURE_HIGH_C
+            ),
         }
 
     def _sport_response_callback(self, msg):
@@ -1070,6 +1087,18 @@ class Go2MappingNode(Node):
             "battery_voltage_v": battery["voltage_v"] if battery else None,
             "battery_current_a": battery["current_a"] if battery else None,
             "battery_status_code": battery["status_code"] if battery else None,
+            "robot_temperature_c": (
+                battery["robot_temperature_c"] if battery else None
+            ),
+            "robot_temperature_average_c": (
+                battery["robot_temperature_average_c"] if battery else None
+            ),
+            "robot_temperature_high": bool(
+                battery and battery["robot_temperature_high"]
+            ),
+            "robot_temperature_high_threshold_c": (
+                ROBOT_TEMPERATURE_HIGH_C
+            ),
             "charging": charging,
             "autonomy_minutes": (
                 battery["autonomy_minutes"] if battery else None

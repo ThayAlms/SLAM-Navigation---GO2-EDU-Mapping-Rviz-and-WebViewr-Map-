@@ -7,6 +7,7 @@ import {
   formatCurrentSpeed,
   readCurrentSpeed,
   readRobotActivity,
+  readRobotTemperature,
 } from "./robotTelemetry.js";
 
 test("lê a velocidade linear real do sport state", () => {
@@ -30,4 +31,16 @@ test("formata bateria, autonomia e velocidade para o dashboard", () => {
   assert.equal(formatAutonomy(null), "CALCULANDO");
   assert.equal(formatAutonomy(20, true), "CARREGANDO");
   assert.equal(formatCurrentSpeed(0.456), "0,46");
+});
+
+test("classifica a maior temperatura dos motores como normal ou alta", () => {
+  assert.deepEqual(readRobotTemperature({ robot_temperature_c: 39 }), {
+    label: "39°C",
+    tone: "is-temperature-ok",
+  });
+  assert.deepEqual(readRobotTemperature({ robot_temperature_c: 72 }), {
+    label: "72°C",
+    tone: "is-temperature-high",
+  });
+  assert.equal(readRobotTemperature({}).tone, "is-stopped");
 });

@@ -347,6 +347,14 @@
   color: rgba(239, 242, 244, 0.76);
 }
 
+.operation-statuses strong.is-temperature-ok {
+  color: #66d69e;
+}
+
+.operation-statuses strong.is-temperature-high {
+  color: #ff8383;
+}
+
 .docking-status {
   flex-basis: 156px !important;
   width: 156px !important;
@@ -453,6 +461,14 @@
 
 :root[data-theme="light"] .operation-statuses strong.is-stopped {
   color: #425866;
+}
+
+:root[data-theme="light"] .operation-statuses strong.is-temperature-ok {
+  color: #168355;
+}
+
+:root[data-theme="light"] .operation-statuses strong.is-temperature-high {
+  color: #b4232d;
 }
 
 :root[data-theme="light"] .docking-action-button {

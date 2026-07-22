@@ -59,3 +59,16 @@ export function formatCurrentSpeed(value) {
     maximumFractionDigits: 2,
   });
 }
+
+export function readRobotTemperature(status = {}) {
+  const temperature = finiteNumber(status.robot_temperature_c);
+  const threshold = finiteNumber(status.robot_temperature_high_threshold_c) ?? 70;
+  if (temperature === null) {
+    return { label: "--°C", tone: "is-stopped" };
+  }
+  const high = status.robot_temperature_high === true || temperature >= threshold;
+  return {
+    label: `${Math.round(temperature)}°C`,
+    tone: high ? "is-temperature-high" : "is-temperature-ok",
+  };
+}

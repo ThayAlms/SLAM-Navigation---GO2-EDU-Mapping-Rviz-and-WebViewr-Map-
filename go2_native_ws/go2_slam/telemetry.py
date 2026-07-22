@@ -6,6 +6,33 @@ import math
 MINIMUM_DISCHARGE_POWER_W = 8.0
 MAX_AUTONOMY_MINUTES = 24 * 60
 MOVEMENT_THRESHOLD_MPS = 0.03
+ROBOT_TEMPERATURE_HIGH_C = 70.0
+
+
+def motor_temperature_summary(motor_states, maximum_motors=12):
+    """Resume a temperatura válida dos motores usados pelo Go2."""
+    if not motor_states:
+        return None
+    values = []
+    for state in list(motor_states)[:maximum_motors]:
+        raw_value = (
+            state.get("temperature")
+            if isinstance(state, dict)
+            else getattr(state, "temperature", None)
+        )
+        try:
+            value = float(raw_value)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(value) and -20.0 <= value <= 120.0:
+            values.append(value)
+    if not values:
+        return None
+    return {
+        "maximum_c": round(max(values), 1),
+        "average_c": round(sum(values) / len(values), 1),
+        "sample_count": len(values),
+    }
 
 
 def current_speed_mps(sport_state):

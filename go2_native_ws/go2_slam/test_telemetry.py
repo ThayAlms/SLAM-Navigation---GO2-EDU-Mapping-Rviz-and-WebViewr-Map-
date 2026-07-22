@@ -1,10 +1,12 @@
 import unittest
 
 from go2_native_ws.go2_slam.telemetry import (
+    ROBOT_TEMPERATURE_HIGH_C,
     activity_status,
     current_speed_mps,
     discharge_power_w,
     estimate_autonomy_minutes,
+    motor_temperature_summary,
 )
 
 
@@ -28,6 +30,22 @@ class TelemetryTest(unittest.TestCase):
         self.assertEqual(activity_status(True, 0.4, True), "charging")
         self.assertEqual(activity_status(False, 0.4), "moving")
         self.assertEqual(activity_status(False, 0.0), "stopped")
+
+    def test_uses_hottest_valid_go2_motor_temperature(self):
+        summary = motor_temperature_summary(
+            [{"temperature": value} for value in (36, 41, 39, 38)]
+        )
+        self.assertEqual(summary["maximum_c"], 41.0)
+        self.assertEqual(summary["average_c"], 38.5)
+        self.assertEqual(summary["sample_count"], 4)
+        self.assertEqual(ROBOT_TEMPERATURE_HIGH_C, 70.0)
+
+    def test_rejects_invalid_motor_temperatures(self):
+        self.assertIsNone(
+            motor_temperature_summary(
+                [{"temperature": None}, {"temperature": 180}]
+            )
+        )
 
 
 if __name__ == "__main__":

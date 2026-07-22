@@ -27,6 +27,7 @@ import {
   formatCurrentSpeed,
   readCurrentSpeed,
   readRobotActivity,
+  readRobotTemperature,
 } from "../services/robotTelemetry";
 import { forwardSpeedMps } from "../services/speedProfile";
 import { useGamepadControl } from "../services/useGamepadControl";
@@ -45,6 +46,10 @@ const OFFLINE_STATUS = {
   lio_connected: false,
   battery_connected: false,
   battery_percent: null,
+  robot_temperature_c: null,
+  robot_temperature_average_c: null,
+  robot_temperature_high: false,
+  robot_temperature_high_threshold_c: 70,
   charging: false,
   autonomy_minutes: null,
   current_speed_mps: 0,
@@ -639,6 +644,7 @@ function DashboardPage() {
     robotStatus.charging,
   );
   const activity = readRobotActivity(robotStatus);
+  const temperature = readRobotTemperature(robotStatus);
   const dockingPresentation = readDockingPresentation(robotStatus);
   const dockingDistance = dockingDistanceLabel(
     robotStatus.docking_distance_m,
@@ -1323,6 +1329,9 @@ function DashboardPage() {
               </span>
               <span>
                 STATUS · <strong className={`is-${activity.key}`}>{activity.label}</strong>
+              </span>
+              <span title="Maior temperatura entre os 12 motores do Go2">
+                TEMPERATURA · <strong className={temperature.tone}>{temperature.label}</strong>
               </span>
               <span className={`docking-status is-${dockingPresentation.tone}`}>
                 BASE · <strong>{dockingPresentation.label}</strong>
