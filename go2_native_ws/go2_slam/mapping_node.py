@@ -32,7 +32,7 @@ from sensor_msgs.msg import Imu, PointCloud2, PointField
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 from unitree_api.msg import Request, Response
-from unitree_go.msg import SportModeState
+from unitree_go.msg import LowState, SportModeState
 
 from motion_profile import (
     DEFAULT_SPEED_PERCENT,
@@ -48,6 +48,12 @@ from motion_profile import (
     remote_control_axes,
     speed_gain,
     velocity_limits,
+)
+from telemetry import (
+    activity_status,
+    current_speed_mps,
+    discharge_power_w,
+    estimate_autonomy_minutes,
 )
 
 DAMP_API_ID = 1001
@@ -74,6 +80,11 @@ SENSOR_STATUS_TIMEOUT_SECONDS = 2.0
 ROBOT_STATUS_TIMEOUT_SECONDS = 2.0
 SPORT_STATE_STATUS_TIMEOUT_SECONDS = 2.0
 SPORT_STATE_SAFETY_TIMEOUT_SECONDS = 1.0
+BATTERY_STATUS_TIMEOUT_SECONDS = 5.0
+BATTERY_SAMPLE_INTERVAL_SECONDS = 0.5
+BATTERY_CAPACITY_WH = 236.8
+CHARGING_CURRENT_THRESHOLD_MA = 500
+DISCHARGE_POWER_SMOOTHING = 0.15
 SAFETY_REASON_MESSAGES = {
     "native_avoidance_unconfirmed": "anticolisão nativo ainda não confirmado",
     "avoidance_mode_unconfirmed": "modo do anticolisão ainda não confirmado",
@@ -105,6 +116,7 @@ class Go2MappingNode(Node):
         self.declare_parameter("max_odometry_rotation_deg", 20.0)
         self.declare_parameter("maps_directory", default_maps)
         self.declare_parameter("interactive", True)
+        self.declare_parameter("battery_capacity_wh", BATTERY_CAPACITY_WH)
 
         self.voxel_size = float(self.get_parameter("voxel_size").value)
         self.min_voxel_hits = int(self.get_parameter("min_voxel_hits").value)
@@ -140,6 +152,9 @@ class Go2MappingNode(Node):
         self.maps_directory = Path(
             str(self.get_parameter("maps_directory").value)
         ).expanduser()
+        self.battery_capacity_wh = max(
+            1.0, float(self.get_parameter("battery_capacity_wh").value)
+        )
         self.maps_directory.mkdir(parents=True, exist_ok=True)
 
         self._lock = threading.Lock()
@@ -161,6 +176,9 @@ class Go2MappingNode(Node):
         self._latest_imu = None
         self._latest_sport_state = None
         self._last_sport_state_at = 0.0
+        self._latest_battery = None
+        self._last_battery_at = 0.0
+        self._smoothed_discharge_power_w = None
         self._posture_state = "unknown"
         self._posture_target = None
         self._posture_command_at = 0.0
@@ -258,6 +276,13 @@ class Go2MappingNode(Node):
             SportModeState,
             "/sportmodestate",
             self._sport_state_callback,
+            qos_profile_sensor_data,
+            callback_group=self._state_callback_group,
+        )
+        self.low_state_sub = self.create_subscription(
+            LowState,
+            "/lowstate",
+            self._low_state_callback,
             qos_profile_sensor_data,
             callback_group=self._state_callback_group,
         )
@@ -436,6 +461,54 @@ class Go2MappingNode(Node):
         )
         if now - self._posture_candidate_since >= confirmation_seconds:
             self._posture_state = candidate
+
+    def _low_state_callback(self, msg):
+        now = time.monotonic()
+        if now - self._last_battery_at < BATTERY_SAMPLE_INTERVAL_SECONDS:
+            return
+        bms = msg.bms_state
+        percent = max(0, min(100, int(bms.soc)))
+        bms_current_ma = int(bms.current)
+        charging = bms_current_ma > CHARGING_CURRENT_THRESHOLD_MA
+        voltage_v = float(msg.power_v)
+        current_a = bms_current_ma / 1000.0
+        consumption_current_a = abs(current_a)
+        if consumption_current_a < 0.1:
+            consumption_current_a = abs(float(msg.power_a))
+
+        measured_power_w = None
+        if not charging:
+            measured_power_w = discharge_power_w(
+                voltage_v, consumption_current_a
+            )
+            if measured_power_w is not None:
+                if self._smoothed_discharge_power_w is None:
+                    self._smoothed_discharge_power_w = measured_power_w
+                else:
+                    alpha = DISCHARGE_POWER_SMOOTHING
+                    self._smoothed_discharge_power_w = (
+                        alpha * measured_power_w
+                        + (1.0 - alpha) * self._smoothed_discharge_power_w
+                    )
+
+        autonomy_minutes = None
+        if not charging and self._smoothed_discharge_power_w is not None:
+            autonomy_minutes = estimate_autonomy_minutes(
+                percent,
+                self.battery_capacity_wh,
+                self._smoothed_discharge_power_w,
+            )
+
+        self._last_battery_at = now
+        self._latest_battery = {
+            "percent": percent,
+            "voltage_v": round(voltage_v, 2),
+            "current_a": round(current_a, 2),
+            "bms_current_ma": bms_current_ma,
+            "status_code": int(bms.status),
+            "charging": charging,
+            "autonomy_minutes": autonomy_minutes,
+        }
 
     def _sport_response_callback(self, msg):
         api_id = int(msg.header.identity.api_id)
@@ -821,11 +894,16 @@ class Go2MappingNode(Node):
         imu_age = max(0.0, now - self._last_imu_at)
         odom_age = max(0.0, now - self._last_odom_at)
         sport_state_age = max(0.0, now - self._last_sport_state_at)
+        battery_age = max(0.0, now - self._last_battery_at)
         lidar_connected = cloud_age < CLOUD_STATUS_TIMEOUT_SECONDS
         imu_connected = imu_age < SENSOR_STATUS_TIMEOUT_SECONDS
         odom_connected = odom_age < ROBOT_STATUS_TIMEOUT_SECONDS
         sport_state_connected = (
             sport_state_age < SPORT_STATE_STATUS_TIMEOUT_SECONDS
+        )
+        battery_connected = (
+            self._latest_battery is not None
+            and battery_age < BATTERY_STATUS_TIMEOUT_SECONDS
         )
         lio_connected = (
             lidar_connected
@@ -843,6 +921,14 @@ class Go2MappingNode(Node):
         safety_ready = avoidance_command_ready and (
             not self._control_armed or remote_source_operational
         )
+        battery = self._latest_battery if battery_connected else None
+        speed_mps = (
+            current_speed_mps(self._latest_sport_state)
+            if sport_state_connected
+            else 0.0
+        )
+        charging = bool(battery and battery["charging"])
+        robot_activity = activity_status(charging, speed_mps)
         with self._lock:
             point_count = sum(
                 self._voxel_hits.get(key, 0) >= self.min_voxel_hits
@@ -861,7 +947,19 @@ class Go2MappingNode(Node):
                 "imu": round(imu_age, 3),
                 "odometry": round(odom_age, 3),
                 "sport_state": round(sport_state_age, 3),
+                "battery": round(battery_age, 3),
             },
+            "battery_connected": battery_connected,
+            "battery_percent": battery["percent"] if battery else None,
+            "battery_voltage_v": battery["voltage_v"] if battery else None,
+            "battery_current_a": battery["current_a"] if battery else None,
+            "battery_status_code": battery["status_code"] if battery else None,
+            "charging": charging,
+            "autonomy_minutes": (
+                battery["autonomy_minutes"] if battery else None
+            ),
+            "current_speed_mps": round(speed_mps, 3),
+            "robot_activity_status": robot_activity,
             "control_armed": self._control_armed,
             "moving": self._moving,
             "last_command": self._last_command,

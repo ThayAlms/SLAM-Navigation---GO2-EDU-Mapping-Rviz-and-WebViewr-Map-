@@ -17,6 +17,13 @@ import {
 } from "../services/api";
 import { isLiveKitEnabled } from "../services/livekit";
 import { publishLiveKitCommand } from "../services/livekitCommands";
+import {
+  formatAutonomy,
+  formatBatteryPercent,
+  formatCurrentSpeed,
+  readCurrentSpeed,
+  readRobotActivity,
+} from "../services/robotTelemetry";
 import { forwardSpeedMps } from "../services/speedProfile";
 import { useGamepadControl } from "../services/useGamepadControl";
 import { useHidGamepadControl } from "../services/useHidGamepadControl";
@@ -32,6 +39,13 @@ const OFFLINE_STATUS = {
   gateway_connected: false,
   camera_connected: false,
   lio_connected: false,
+  battery_connected: false,
+  battery_percent: null,
+  charging: false,
+  autonomy_minutes: null,
+  current_speed_mps: 0,
+  robot_activity_status: "stopped",
+  sport_state: null,
   control_armed: false,
   posture: "unknown",
   point_count: 0,
@@ -599,6 +613,23 @@ function DashboardPage() {
   const lowerSpeed = Math.max(speedMin, speed - speedStep);
   const higherSpeed = Math.min(speedMax, speed + speedStep);
   const selectedForwardSpeed = forwardSpeedMps(speed);
+  const currentSpeed = readCurrentSpeed(robotStatus);
+  const batteryPercent = Number(robotStatus.battery_percent);
+  const batteryLabel = formatBatteryPercent(robotStatus.battery_percent);
+  const autonomyLabel = formatAutonomy(
+    robotStatus.autonomy_minutes,
+    robotStatus.charging,
+  );
+  const activity = readRobotActivity(robotStatus);
+  const batteryTone = !robotStatus.battery_connected
+    ? "is-offline"
+    : robotStatus.charging
+      ? "is-charging"
+      : batteryPercent <= 15
+        ? "is-offline"
+        : batteryPercent <= 30
+          ? "is-warning"
+          : "is-online";
 
   const postureControlsDisabled =
     !robotStatus.sdk_connected || !robotStatus.control_armed || Boolean(pendingAction);
@@ -1234,6 +1265,26 @@ function DashboardPage() {
           </div>
           {statusMessage && <p className="operation-message" role="status">{statusMessage}</p>}
           </section>
+
+          <div className="telemetry-hud">
+            <div
+              className="operation-statuses telemetry-statuses"
+              aria-label="Telemetria do robô"
+            >
+              <span>
+                BATERIA · <strong className={batteryTone}>{batteryLabel}</strong>
+              </span>
+              <span>
+                AUTONOMIA · <strong className={robotStatus.charging ? "is-charging" : ""}>{autonomyLabel}</strong>
+              </span>
+              <span>
+                VELOCIDADE · <strong>{formatCurrentSpeed(currentSpeed)} M/S</strong>
+              </span>
+              <span>
+                STATUS · <strong className={`is-${activity.key}`}>{activity.label}</strong>
+              </span>
+            </div>
+          </div>
         </section>
 
         {isMapOpen && (

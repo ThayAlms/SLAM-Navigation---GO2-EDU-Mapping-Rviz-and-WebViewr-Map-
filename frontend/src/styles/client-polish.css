@@ -292,3 +292,169 @@
     max-width: 64px !important;
   }
 }
+
+/* ---------------------------------------------------------
+   Faixa inferior de telemetria. Replica dimensões, tipografia
+   e pílulas da faixa superior sem cobrir câmera ou comandos.
+   --------------------------------------------------------- */
+.dashboard-grid {
+  padding-bottom: 68px;
+}
+
+.telemetry-hud {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 68px;
+  padding: 0 18px;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  background: color-mix(in srgb, var(--color-surface) 72%, transparent);
+  font-family: var(--font-secondary);
+  backdrop-filter: blur(12px);
+}
+
+.telemetry-statuses {
+  justify-content: center;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.telemetry-statuses::-webkit-scrollbar {
+  display: none;
+}
+
+.operation-statuses strong.is-warning {
+  color: #ffbd66;
+}
+
+.operation-statuses strong.is-charging {
+  color: #69c9ee;
+}
+
+.operation-statuses strong.is-moving {
+  color: #66d69e;
+}
+
+.operation-statuses strong.is-stopped {
+  color: rgba(239, 242, 244, 0.76);
+}
+
+:root[data-theme="light"] .telemetry-hud {
+  border-top-color: rgba(31, 65, 87, 0.1);
+  background: rgba(255, 255, 255, 0.68);
+  box-shadow: 0 -8px 24px rgba(40, 83, 108, 0.04);
+}
+
+:root[data-theme="light"] .operation-statuses strong.is-warning {
+  color: #a45f08;
+}
+
+:root[data-theme="light"] .operation-statuses strong.is-charging {
+  color: #0a79a8;
+}
+
+:root[data-theme="light"] .operation-statuses strong.is-moving {
+  color: #168355;
+}
+
+:root[data-theme="light"] .operation-statuses strong.is-stopped {
+  color: #425866;
+}
+
+@media (min-width: 768px) and (max-width: 1199px) and (min-height: 561px) {
+  .dashboard-grid {
+    padding-bottom: 0;
+  }
+
+  .telemetry-hud {
+    position: static;
+    grid-column: 1 / -1;
+    order: 99;
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 767px) and (orientation: portrait) {
+  .dashboard-grid {
+    padding-bottom: 0 !important;
+  }
+
+  .telemetry-hud {
+    position: static;
+    grid-column: 1 / -1;
+    order: 99;
+    width: calc(100% - 8px);
+    min-width: 0;
+    height: 60px;
+    margin-inline: 4px;
+    padding: 0 6px;
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+  }
+
+  .telemetry-statuses {
+    justify-content: flex-start;
+    gap: 6px;
+    padding-bottom: 3px;
+  }
+
+  .telemetry-statuses > span,
+  :root[data-theme="light"] .telemetry-statuses > span {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 132px;
+    min-height: 30px !important;
+    padding: 0 8px !important;
+    font-size: 8px;
+    scroll-snap-align: start;
+  }
+}
+
+@media (orientation: landscape) and (max-width: 1199px) and (max-height: 560px) {
+  .dashboard-grid {
+    padding-bottom: 52px !important;
+  }
+
+  .telemetry-hud {
+    right: 7px;
+    bottom: 5px;
+    left: 7px;
+    width: auto;
+    height: 42px;
+    padding: 3px 6px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 999px;
+    background: rgba(6, 10, 14, 0.72);
+    backdrop-filter: blur(8px);
+  }
+
+  .telemetry-statuses {
+    justify-content: flex-start;
+    gap: 6px;
+  }
+
+  .telemetry-statuses > span,
+  :root[data-theme="light"] .telemetry-statuses > span {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 118px;
+    min-height: 28px !important;
+    padding: 0 8px !important;
+    font-size: 8px;
+    scroll-snap-align: start;
+  }
+
+  :root[data-theme="light"] .telemetry-hud {
+    border-color: rgba(31, 65, 87, 0.16);
+    background: rgba(250, 252, 253, 0.94);
+  }
+}
