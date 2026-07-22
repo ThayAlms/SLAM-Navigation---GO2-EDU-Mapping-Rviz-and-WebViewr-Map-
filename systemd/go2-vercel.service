@@ -13,13 +13,12 @@ Environment=HOME=/home/unitree
 Environment=PATH=/home/unitree/.local/bin:/usr/local/bin:/usr/bin:/bin
 Environment=OPEN_BROWSER=0
 Environment=PYTHONUNBUFFERED=1
-Environment=GO2_CAMERA_INTERFACE=eth0
 Environment="GO2_UPLINK_CONNECTION=XD4 Local"
 Environment=GO2_UPLINK_SSID=XD4
 Environment=GO2_FALLBACK_CONNECTION=Thaina
 Environment=GO2_FALLBACK_SSID=Thaina
 Environment=GO2_UPLINK_INTERFACE=wlan0
-Environment=GO2_ROBOT_INTERFACE=eth0
+Environment=GO2_ROBOT_INTERFACE=auto
 EnvironmentFile=-/etc/oracle-go2-teleoperation/network.env
 
 # Prefere o SSID XD4, usa Thaina como fallback e mantem a Ethernet do Go2.

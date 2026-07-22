@@ -3,6 +3,13 @@ set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_ENV="$ROOT/backend/.env"
+NETWORK_RUNTIME_FILE="${GO2_NETWORK_RUNTIME_FILE:-/run/oracle-go2-teleoperation/network.env}"
+if [[ -r "$NETWORK_RUNTIME_FILE" ]]; then
+  # Gerado pelo preparador privilegiado depois de confirmar o Go2 por ping.
+  source "$NETWORK_RUNTIME_FILE"
+fi
+export GO2_ROBOT_INTERFACE="${GO2_ROBOT_INTERFACE:-eth0}"
+export GO2_CAMERA_INTERFACE="${GO2_CAMERA_INTERFACE:-$GO2_ROBOT_INTERFACE}"
 ROOM_NAME="${LIVEKIT_ROOM_NAME:-go2-primary}"
 INGRESS_NAME="${GO2_LIVEKIT_INGRESS_NAME:-go2-front-camera}"
 VIDEO_TRANSPORT="${LIVEKIT_VIDEO_TRANSPORT:-direct}"

@@ -18,6 +18,12 @@ unset GO2_SETUP_RESTORE_NOUNSET
 
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export ROS_DOMAIN_ID=0
-export CYCLONEDDS_URI='<CycloneDDS><Domain><General><Interfaces><NetworkInterface name="eth0" priority="default" multicast="default" /></Interfaces></General></Domain></CycloneDDS>'
+GO2_INTERFACE="${GO2_ROBOT_INTERFACE:-eth0}"
+if [[ ! "$GO2_INTERFACE" =~ ^[[:alnum:]_.:-]+$ ]] \
+  || [[ ! -d "/sys/class/net/$GO2_INTERFACE" ]]; then
+  echo "[ERRO] Interface do Go2 inválida: $GO2_INTERFACE" >&2
+  return 1 2>/dev/null || exit 1
+fi
+export CYCLONEDDS_URI="<CycloneDDS><Domain><General><Interfaces><NetworkInterface name=\"$GO2_INTERFACE\" priority=\"default\" multicast=\"default\" /></Interfaces></General></Domain></CycloneDDS>"
 
-echo "Ambiente Go2 ativo em eth0 (192.168.123.18), CycloneDDS 0.10, domínio DDS 0."
+echo "Ambiente Go2 ativo em $GO2_INTERFACE (192.168.123.18), CycloneDDS 0.10, domínio DDS 0."

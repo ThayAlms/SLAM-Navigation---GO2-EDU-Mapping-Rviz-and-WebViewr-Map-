@@ -3,7 +3,10 @@ set -Eeuo pipefail
 
 UPLINK_CONNECTION="${GO2_UPLINK_CONNECTION:-XD4 Local}"
 UPLINK_INTERFACE="${GO2_UPLINK_INTERFACE:-wlan0}"
-ROBOT_INTERFACE="${GO2_ROBOT_INTERFACE:-eth0}"
+ROBOT_INTERFACE="${GO2_ROBOT_INTERFACE:-auto}"
+ROBOT_ADDRESS="${GO2_ROBOT_ADDRESS:-192.168.123.18/24}"
+ROBOT_HOST="${GO2_ROBOT_HOST:-192.168.123.161}"
+NETWORK_RUNTIME_FILE="${GO2_NETWORK_RUNTIME_FILE:-/run/oracle-go2-teleoperation/network.env}"
 PRIMARY_SSID="${GO2_UPLINK_SSID:-XD4}"
 FALLBACK_CONNECTION="${GO2_FALLBACK_CONNECTION:-Thaina}"
 FALLBACK_SSID="${GO2_FALLBACK_SSID:-Thaina}"
@@ -54,18 +57,6 @@ if [[ "$fallback_profile_exists" == true ]]; then
   fi
 fi
 
-robot_connection="$(
-  nmcli -g GENERAL.CONNECTION device show "$ROBOT_INTERFACE" 2>/dev/null \
-    || true
-)"
-if [[ -n "$robot_connection" && "$robot_connection" != "--" ]]; then
-  nmcli connection modify "$robot_connection" \
-    ipv4.never-default yes \
-    ipv4.route-metric 600 \
-    ipv6.never-default yes \
-    ipv6.route-metric 600
-fi
-
 ssid_is_visible() {
   local wanted_ssid="$1"
   local visible_ssid
@@ -109,6 +100,75 @@ done
   exit 1
 }
 
+interface_has_carrier() {
+  local interface="$1"
+  [[ -r "/sys/class/net/$interface/carrier" ]] \
+    && [[ "$(<"/sys/class/net/$interface/carrier")" == "1" ]]
+}
+
+probe_robot_interface() {
+  local interface="$1"
+  local address_added=false
+
+  [[ "$interface" != "$UPLINK_INTERFACE" ]] || return 1
+  [[ "$interface" =~ ^(eth|en)[[:alnum:]_.:-]*$ ]] || return 1
+  interface_has_carrier "$interface" || return 1
+
+  ip link set "$interface" up
+  if ! ip -o -4 address show dev "$interface" \
+    | awk '{print $4}' | grep -Fxq "$ROBOT_ADDRESS"; then
+    ip -4 address replace "$ROBOT_ADDRESS" dev "$interface"
+    address_added=true
+  fi
+
+  if ping -I "$interface" -c 1 -W 1 "$ROBOT_HOST" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if [[ "$address_added" == true ]]; then
+    ip -4 address del "$ROBOT_ADDRESS" dev "$interface" 2>/dev/null || true
+  fi
+  return 1
+}
+
+robot_candidates=()
+if [[ "$ROBOT_INTERFACE" != "auto" ]]; then
+  robot_candidates+=("$ROBOT_INTERFACE")
+fi
+for interface_path in /sys/class/net/eth* /sys/class/net/en*; do
+  [[ -e "$interface_path" ]] || continue
+  candidate="${interface_path##*/}"
+  [[ " ${robot_candidates[*]} " == *" $candidate "* ]] \
+    || robot_candidates+=("$candidate")
+done
+
+selected_robot_interface=""
+for candidate in "${robot_candidates[@]}"; do
+  if probe_robot_interface "$candidate"; then
+    selected_robot_interface="$candidate"
+    break
+  fi
+done
+
+[[ -n "$selected_robot_interface" ]] || {
+  echo "[ERRO] Nenhuma Ethernet com acesso ao Go2 ($ROBOT_HOST) foi encontrada." >&2
+  echo "       Confirme o cabo e a energia do robô; interfaces testadas: ${robot_candidates[*]}." >&2
+  exit 1
+}
+ROBOT_INTERFACE="$selected_robot_interface"
+
+robot_connection="$(
+  nmcli -g GENERAL.CONNECTION device show "$ROBOT_INTERFACE" 2>/dev/null \
+    || true
+)"
+if [[ -n "$robot_connection" && "$robot_connection" != "--" ]]; then
+  nmcli connection modify "$robot_connection" \
+    ipv4.never-default yes \
+    ipv4.route-metric 600 \
+    ipv6.never-default yes \
+    ipv6.route-metric 600
+fi
+
 while ip -4 route show default dev "$ROBOT_INTERFACE" \
   | grep -q '^default'; do
   ip -4 route del default dev "$ROBOT_INTERFACE"
@@ -123,4 +183,11 @@ selected_route="$(ip -4 route get 8.8.8.8)"
   exit 1
 }
 
-echo "Internet: '$selected_connection' em $UPLINK_INTERFACE; Go2 local em $ROBOT_INTERFACE sem rota default."
+install -d -m 0755 "$(dirname "$NETWORK_RUNTIME_FILE")"
+runtime_temporary="${NETWORK_RUNTIME_FILE}.tmp"
+printf 'export GO2_ROBOT_INTERFACE=%q\nexport GO2_CAMERA_INTERFACE=%q\n' \
+  "$ROBOT_INTERFACE" "$ROBOT_INTERFACE" >"$runtime_temporary"
+chmod 0644 "$runtime_temporary"
+mv -f "$runtime_temporary" "$NETWORK_RUNTIME_FILE"
+
+echo "Internet: '$selected_connection' em $UPLINK_INTERFACE; Go2 local em $ROBOT_INTERFACE ($ROBOT_ADDRESS) sem rota default."

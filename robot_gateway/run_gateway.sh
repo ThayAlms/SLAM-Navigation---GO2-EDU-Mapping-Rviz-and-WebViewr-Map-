@@ -22,8 +22,22 @@ if [[ ! -f "$ROS_INSTALL" ]]; then
 fi
 
 set +u
-source "$RUNTIME_ROOT/go2_native_ws/setup_go2.sh"
+source "$RUNTIME_ROOT/go2_native_ws/setup_go2.sh" >/dev/null
 set -u
+
+ROBOT_INTERFACE="${GO2_ROBOT_INTERFACE:-eth0}"
+if [[ ! "$ROBOT_INTERFACE" =~ ^[[:alnum:]_.:-]+$ ]] \
+  || [[ ! -d "/sys/class/net/$ROBOT_INTERFACE" ]]; then
+  echo "[ERRO] Interface do Go2 inválida: $ROBOT_INTERFACE" >&2
+  exit 1
+fi
+if [[ "$(cat "/sys/class/net/$ROBOT_INTERFACE/carrier" 2>/dev/null || true)" != "1" ]]; then
+  echo "[ERRO] $ROBOT_INTERFACE está sem link físico com o Go2." >&2
+  exit 1
+fi
+export GO2_CAMERA_INTERFACE="${GO2_CAMERA_INTERFACE:-$ROBOT_INTERFACE}"
+export CYCLONEDDS_URI="<CycloneDDS><Domain><General><Interfaces><NetworkInterface name=\"$ROBOT_INTERFACE\" priority=\"default\" multicast=\"default\" /></Interfaces></General></Domain></CycloneDDS>"
+echo "Ambiente Go2 ativo em $ROBOT_INTERFACE (192.168.123.18), CycloneDDS 0.10, domínio DDS 0."
 
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-8081}"

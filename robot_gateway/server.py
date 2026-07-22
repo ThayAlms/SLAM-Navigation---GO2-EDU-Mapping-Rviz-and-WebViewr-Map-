@@ -6,6 +6,7 @@ import hmac
 import json
 import os
 import signal
+import socket
 import sys
 import threading
 import time
@@ -29,14 +30,24 @@ from mapping_node import Go2MappingNode  # noqa: E402
 
 
 class CameraStream:
-    PIPELINE = (
-        "udpsrc address=230.1.1.1 port=1720 multicast-iface=eth0 "
-        'caps="application/x-rtp,media=video,encoding-name=H264,clock-rate=90000" ! '
-        "rtph264depay ! h264parse ! avdec_h264 ! videoconvert ! "
-        "video/x-raw,format=BGR ! appsink drop=true max-buffers=1 sync=false"
-    )
-
     def __init__(self, marker_callback=None):
+        self.interface = os.environ.get(
+            "GO2_CAMERA_INTERFACE",
+            os.environ.get("GO2_ROBOT_INTERFACE", "eth0"),
+        )
+        try:
+            socket.if_nametoindex(self.interface)
+        except OSError as error:
+            raise RuntimeError(
+                "Interface da câmera do Go2 indisponível: %s"
+                % self.interface
+            ) from error
+        self.pipeline = (
+            "udpsrc address=230.1.1.1 port=1720 multicast-iface=%s "
+            'caps="application/x-rtp,media=video,encoding-name=H264,clock-rate=90000" ! '
+            "rtph264depay ! h264parse ! avdec_h264 ! videoconvert ! "
+            "video/x-raw,format=BGR ! appsink drop=true max-buffers=1 sync=false"
+        ) % self.interface
         self.condition = threading.Condition()
         self.jpeg = None
         self.frame = None
@@ -58,7 +69,7 @@ class CameraStream:
 
     def _run(self):
         while not self.stop_event.is_set():
-            capture = cv2.VideoCapture(self.PIPELINE, cv2.CAP_GSTREAMER)
+            capture = cv2.VideoCapture(self.pipeline, cv2.CAP_GSTREAMER)
             if not capture.isOpened():
                 self.connected = False
                 time.sleep(1.0)
